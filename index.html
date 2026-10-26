@@ -615,7 +615,7 @@ setInterval(()=>{ if(mode!=="view") refreshUi(); },15000);   // 정차 시간 �
 map.on("dragstart",()=>{ if(follow&&mode!=="view"){ follow=false; refreshUi(); } });
 calcRecKm(); drawRec(); refreshUi(); renderRecDays();
 
-const APP_V="v5"; $("#ver").textContent=APP_V;
+const APP_V="v6"; $("#ver").textContent=APP_V;
 if("serviceWorker" in navigator && /^https?:$/.test(location.protocol)){
   const had=!!navigator.serviceWorker.controller;
   navigator.serviceWorker.register("sw.js").then(r=>r.update()).catch(()=>{});
