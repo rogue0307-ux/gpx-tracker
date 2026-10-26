@@ -78,8 +78,17 @@ button.primary{background:var(--accent);color:var(--accent-ink);border-color:var
 .acts.show{display:flex}
 .acts button{padding:10px 14px;font-size:14px;background:var(--panel);box-shadow:0 4px 18px rgba(0,0,0,.25);border-radius:10px}
 .acts button[hidden]{display:none}
-.recdays{border-bottom:1px solid var(--line);max-height:170px;overflow:auto;flex:none}
-.rdh{padding:6px 16px;color:var(--muted);font-size:12px;position:sticky;top:0;background:var(--panel)}
+aside{overflow:auto}
+.list{overflow:visible;flex:none}
+.sec{padding:10px 16px;border-bottom:1px solid var(--line);flex:none}
+.sec .sh,.rdh{font-size:12px;font-weight:600;color:var(--muted);margin-bottom:6px}
+.sec summary{cursor:pointer;font-weight:600;padding:2px 0;list-style:none}
+.sec summary::-webkit-details-marker{display:none}
+.sec[open] summary{margin-bottom:6px}
+.recdays{padding:10px 0 4px}
+.recdays .rdh{padding:0 16px;display:flex;align-items:center;gap:8px;margin-bottom:2px}
+.rdl{max-height:230px;overflow:auto}
+.rd input[type=checkbox],.month input[type=checkbox],.item input[type=checkbox]{width:20px;height:20px;flex:none}
 .rd{display:flex;align-items:center;gap:8px;padding:6px 16px;cursor:pointer}
 .rd:hover{background:var(--hover)}
 .rd .sw{width:10px;height:10px;border-radius:50%;flex:none}
@@ -91,7 +100,7 @@ button.primary{background:var(--accent);color:var(--accent-ink);border-color:var
 .mearrow{position:absolute;left:50%;top:-10px;margin-left:-8px;border:8px solid transparent;border-bottom:14px solid #2563eb;display:none}
 .mewrap.hd .mearrow{display:block}
 @media (max-width:760px){
-  .app{grid-template-columns:1fr;grid-template-rows:55vh 1fr}
+  .app{grid-template-columns:minmax(0,1fr);grid-template-rows:55vh 1fr}
   .mapwrap{order:-1}
   aside{border-right:0;border-top:1px solid var(--line)}
   body.live .app{grid-template-rows:1fr}
@@ -115,37 +124,33 @@ html,body{height:100dvh}
 <body>
 <div class="app">
   <aside>
-    <div class="head">
-      <h1>GPX 트래커</h1>
-      <div class="drop" id="drop"><b>GPX 파일을 끌어다 놓기</b> 또는 클릭 (여러 개 가능)<br><small id="fileinfo">로드된 파일 없음</small></div>
+    <div class="head"><h1>GPX 트래커</h1></div>
+    <div class="sec recdays" id="recdays" style="display:none"></div>
+    <div class="sec">
+      <div class="sh">불러온 경로 (GPX)</div>
+      <div class="drop" id="drop"><b>＋ GPX 파일 불러오기</b> (여러 개 선택 가능)<br><small id="fileinfo">로드된 파일 없음</small></div>
       <div id="filelist"></div>
       <input type="file" id="file" accept=".gpx,application/gpx+xml,text/xml" multiple hidden>
-      <div class="row">
-        <input type="text" id="q" placeholder="검색: 날짜·국가·MOTORCYCLING …">
-      </div>
-      <div class="row">
-        <label>기간</label><input type="date" id="from"><span>~</span><input type="date" id="to">
-      </div>
-      <div class="row">
-        <label>최소 거리</label><input type="number" id="minkm" min="0" value="0" step="5"><label>km</label>
-        <label style="margin-left:auto">색상</label>
-        <select id="colorBy"><option value="date">날짜 그라데이션</option><option value="month">월별</option><option value="one">단색</option></select>
-      </div>
-      <div class="row">
-        <select id="base"></select>
-        <label><input type="checkbox" id="link"> 구간 연결(점선)</label>
-        <button id="reset">초기화</button>
-      </div>
     </div>
-    <div class="stats"><span>트랙 <b id="sTr">0</b>/<b id="sAll">0</b></span><span>거리 <b id="sKm">0</b> km</span><span>점 <b id="sPt">0</b></span></div>
-    <div class="recdays" id="recdays" style="display:none"></div>
-    <div class="list" id="list"><div class="empty">GPX 파일을 불러오면 일자별 트랙이 여기에 표시됩니다.</div></div>
+    <details class="sec" id="settings">
+      <summary>⚙ 지도·표시 설정</summary>
+      <div class="row"><label>지도</label><select id="base"></select></div>
+      <div class="row"><label>색상</label><select id="colorBy"><option value="date">날짜 그라데이션</option><option value="month">월별</option><option value="one">단색</option></select></div>
+      <div class="row"><label><input type="checkbox" id="link"> 구간 사이 점선 연결</label></div>
+      <div class="sh" style="margin-top:12px">경로 필터</div>
+      <div class="row"><input type="text" id="q" placeholder="검색: 날짜·국가·이름 …"></div>
+      <div class="row"><label>기간</label><input type="date" id="from"><span>~</span><input type="date" id="to"></div>
+      <div class="row"><label>최소 거리</label><input type="number" id="minkm" min="0" value="0" step="5"><label>km</label>
+        <button id="reset" style="margin-left:auto">경로 모두 비우기</button></div>
+    </details>
+    <div class="stats"><span>경로 <b id="sTr">0</b>/<b id="sAll">0</b></span><span>거리 <b id="sKm">0</b> km</span><span>점 <b id="sPt">0</b></span></div>
+    <div class="list" id="list"><div class="empty">GPX 파일을 불러오면 일자별 경로가 여기에 표시됩니다.</div></div>
   </aside>
   <div class="mapwrap"><div id="map"></div><div class="toast" id="toast"></div>
     <div class="nav">
       <div class="hud" id="hud"></div>
       <div class="acts" id="acts">
-        <button id="btnFollow">⌖ 따라가기</button>
+        <button id="btnLoad">📂 GPX 불러오기</button><button id="btnFollow">⌖ 따라가기</button>
       </div>
       <div class="seg" id="seg"><button data-m="view" class="on">🗂 기록</button><button data-m="nav" class="rec">📍 트래커</button></div>
     </div>
@@ -382,7 +387,7 @@ async function loadTexts(items){           // items: [{name,text}]
   drawWpts();
   const b=L.latLngBounds([]);
   tracks.forEach(t=>t.group&&t.visible&&b.extend(t.group.getBounds()));
-  if(b.isValid() && mode==="view") map.fitBounds(b.pad(.05));
+  if(b.isValid()&&added){ if(mode!=="view"){ follow=false; refreshUi(); } map.fitBounds(b.pad(.05)); }   // 트래커 중 코스를 불러오면 코스 전체를 보여주고 따라가기는 해제
   recLine.bringToFront();
   if(added) toast(`트랙 ${added}개 추가`);
 }
@@ -442,6 +447,9 @@ const DAY_KEY="gpxv.day.";                   // 일자별 저장: gpxv.day.2026-
 const p2=n=>String(n).padStart(2,"0");
 const dayOf=t=>{ const d=new Date(t); return `${d.getFullYear()}-${p2(d.getMonth()+1)}-${p2(d.getDate())}`; };
 const dirty=new Set();
+let recHidden=new Set();                      // 지도에서 숨긴 일자 (체크 해제)
+try{ recHidden=new Set(JSON.parse(localStorage.getItem("gpxv.rechidden")||"[]")); }catch(e){}
+const saveHidden=()=>{ try{localStorage.setItem("gpxv.rechidden",JSON.stringify([...recHidden]))}catch(e){} };
 let mode="view", watchId=null, follow=true, wake=null, recKm=0, lastFix=null;
 let rec=[];                                  // [lat,lon,time,ele,새구간여부]
 try{
@@ -457,7 +465,10 @@ const me=L.marker([0,0],{interactive:false,zIndexOffset:1000,
 
 function recSegs(){ const s=[]; let cur=null; for(const p of rec){ if(!cur||p[4]){cur=[];s.push(cur)} cur.push(p); } return s; }
 function calcRecKm(){ recKm=0; for(const s of recSegs()) for(let i=1;i<s.length;i++) recKm+=hav(s[i-1],s[i]); }
-function drawRec(){ recLine.setLatLngs(recSegs().map(s=>s.map(p=>[p[0],p[1]]))); recLine.bringToFront(); }
+function drawRec(){
+  const segs=[]; for(const [d,ss] of groupDays()) if(!recHidden.has(d)) segs.push(...ss);
+  recLine.setLatLngs(segs.map(s=>s.map(p=>[p[0],p[1]]))); recLine.bringToFront();
+}
 function saveRec(){
   const byDay=new Map();
   for(const q of rec){ const d=dayOf(q[2]); if(dirty.has(d)){ if(!byDay.has(d)) byDay.set(d,[]); byDay.get(d).push(q); } }
@@ -525,6 +536,7 @@ function setMode(m){
   if(m===mode) return;
   if(m!=="view" && !startWatch()) return;
   mode=m; follow=true;
+  if(m==="nav"){ recHidden.delete(dayOf(Date.now())); saveHidden(); drawRec(); }   // 트래커 중에는 오늘 기록을 항상 표시
   if(m==="view"){ stopWatch(); saveRec(); renderRecDays(); }
   document.body.classList.toggle("live",m!=="view");
   document.querySelectorAll("#seg button").forEach(b=>b.classList.toggle("on",b.dataset.m===m));
@@ -541,7 +553,7 @@ function refreshUi(){
     const idle=rec.length&&lastFix?Math.floor((Date.now()-rec[rec.length-1][2])/60000):0;
     hud.textContent=a+(rec.length?` · 기록 ${recKm.toFixed(1)}km`:"")+(idle>=1?` · 정차 ${idle>=60?Math.floor(idle/60)+"시간 "+idle%60:idle}분`:"");
   }
-  acts.classList.toggle("show",live&&!follow);
+  acts.classList.toggle("show",live);
   $("#btnFollow").hidden=!live||follow;
 }
 function groupDays(){                       // 일자별 구간 묶음 (자정 넘으면 새 구간)
@@ -580,18 +592,23 @@ function renderRecDays(){
   const days=[...groupDays()].sort((a,b)=>a[0]<b[0]?1:-1);
   if(!days.length){ box.style.display="none"; return; }
   box.style.display="block";
-  box.innerHTML='<div class="rdh">내 주행기록 (폰에 일자별 자동 저장)</div>'+days.map(([d,segs])=>{
+  const allOn=days.every(([d])=>!recHidden.has(d));
+  box.innerHTML=`<div class="rdh"><input type="checkbox" id="rcall" ${allOn?"checked":""} title="전체 선택/해제"><span>내 주행기록 ${days.length}일</span><span style="margin-left:auto;font-weight:400">폰에 자동 저장</span></div><div class="rdl">`+days.map(([d,segs])=>{
     const st=dayStats(segs);
-    return `<div class="rd" data-d="${d}"><span class="sw" style="background:#ef4444"></span><div class="t"><div class="d">${d.slice(5)} <span style="font-weight:400;color:var(--muted)">${st.km.toFixed(1)}km</span></div><div class="n">${hm(st.f)}~${hm(st.l)}${st.stop?` · 정차 ${st.stop}분`:""}</div></div><button data-x="${d}" title="GPX로 내려받기">⬇</button></div>`;
-  }).join("");
+    return `<div class="rd" data-d="${d}"><input type="checkbox" data-rc="${d}" ${recHidden.has(d)?"":"checked"}><span class="sw" style="background:#ef4444"></span><div class="t"><div class="d">${d.slice(5)} <span style="font-weight:400;color:var(--muted)">${st.km.toFixed(1)}km</span></div><div class="n">${hm(st.f)}~${hm(st.l)}${st.stop?` · 정차 ${st.stop}분`:""}</div></div><button data-x="${d}" title="GPX로 내려받기">⬇</button></div>`;
+  }).join("")+"</div>";
 }
 $("#recdays").addEventListener("click",e=>{
+  if(e.target.id==="rcall"){ const on=e.target.checked; recHidden=on?new Set():new Set([...groupDays().keys()]); saveHidden(); drawRec(); renderRecDays(); return; }
+  const c=e.target.closest("[data-rc]"); if(c){ if(c.checked) recHidden.delete(c.dataset.rc); else recHidden.add(c.dataset.rc); saveHidden(); drawRec(); renderRecDays(); return; }
   const x=e.target.closest("[data-x]"); if(x){ exportDay(x.dataset.x); return; }
   const r=e.target.closest(".rd"); if(!r) return;
   const segs=groupDays().get(r.dataset.d); if(!segs) return;
+  if(recHidden.has(r.dataset.d)){ recHidden.delete(r.dataset.d); saveHidden(); drawRec(); renderRecDays(); }
   map.fitBounds(L.latLngBounds(segs.flat().map(q=>[q[0],q[1]])).pad(.15),{maxZoom:16});
 });
 $("#seg").addEventListener("click",e=>{ const b=e.target.closest("[data-m]"); if(b) setMode(b.dataset.m); });
+$("#btnLoad").onclick=()=>$("#file").click();
 $("#btnFollow").onclick=()=>{ follow=true; if(lastFix&&me.getLatLng()) map.setView(me.getLatLng(),Math.max(map.getZoom(),16),{animate:false}); refreshUi(); };
 setInterval(()=>{ if(mode!=="view") refreshUi(); },15000);   // 정차 시간 갱신
 map.on("dragstart",()=>{ if(follow&&mode!=="view"){ follow=false; refreshUi(); } });
