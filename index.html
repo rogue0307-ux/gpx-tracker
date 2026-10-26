@@ -25,9 +25,9 @@
   }
 }
 *{box-sizing:border-box}
-html,body{height:100%;margin:0}
+html,body{height:var(--app-h,100%);margin:0;overflow:hidden;overscroll-behavior:none;position:fixed;inset:0;width:100%}
 body{background:var(--bg);color:var(--ink);font:14px/1.45 system-ui,-apple-system,"Segoe UI","Malgun Gothic",sans-serif}
-.app{display:grid;grid-template-columns:380px 1fr;height:100%}
+.app{display:grid;grid-template-columns:380px 1fr;height:var(--app-h,100%)}
 aside{background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
 .head{padding:14px 16px 10px;border-bottom:1px solid var(--line)}
 .head{display:flex;align-items:center;gap:8px}
@@ -82,7 +82,11 @@ button.primary{background:var(--accent);color:var(--accent-ink);border-color:var
 .acts.show{display:flex}
 .acts button{padding:10px 14px;font-size:14px;background:var(--panel);box-shadow:0 4px 18px rgba(0,0,0,.25);border-radius:10px}
 .acts button[hidden]{display:none}
-aside{overflow:auto}
+aside{display:flex;flex-direction:column;overflow:hidden}
+.sheetbody{flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.sheetbody::-webkit-scrollbar,.rdl::-webkit-scrollbar,#filelist::-webkit-scrollbar{display:none}
+.rdl,#filelist{scrollbar-width:none}
+.grab{display:none}
 .list{overflow:visible;flex:none}
 .sec{padding:10px 16px;border-bottom:1px solid var(--line);flex:none}
 .sec .sh,.rdh{font-size:12px;font-weight:600;color:var(--muted);margin-bottom:6px}
@@ -106,17 +110,20 @@ aside{overflow:auto}
 .mearrow{position:absolute;left:50%;top:-10px;margin-left:-8px;border:8px solid transparent;border-bottom:14px solid #2563eb;display:none}
 .mewrap.hd .mearrow{display:block}
 @media (max-width:760px){
-  .app{grid-template-columns:minmax(0,1fr);grid-template-rows:55vh 1fr}
-  .mapwrap{order:-1}
-  aside{border-right:0;border-top:1px solid var(--line)}
-  body.live .app{grid-template-rows:1fr}
+  .app{display:block;position:relative}
+  .mapwrap{position:absolute;inset:0}
+  aside{position:absolute;left:0;right:0;bottom:0;height:var(--sheet-h,42%);z-index:1100;border:0;border-radius:18px 18px 0 0;
+    box-shadow:0 -6px 24px rgba(0,0,0,.35);transition:height .2s ease}
+  aside.drag{transition:none}
   body.live aside{display:none}
-  .app{grid-template-rows:60dvh 1fr}
-  body.live .app{grid-template-rows:1fr}
+  .grab{display:flex;justify-content:center;padding:12px 0 8px;touch-action:none;cursor:grab;flex:none}
+  .grab i{width:48px;height:5px;border-radius:3px;background:var(--muted);opacity:.6}
+  .sheetbody{padding-bottom:env(safe-area-inset-bottom)}
   input[type=text],input[type=date],input[type=number],select{font-size:16px;padding:8px 10px}   /* iOS 확대 방지 + 터치 */
   button{padding:9px 14px}
   .item{padding:10px 14px}.month{padding:10px 14px}
-  .nav{bottom:calc(18px + env(safe-area-inset-bottom));width:calc(100% - 20px)}
+  .nav{bottom:min(calc(var(--sheet-h,42%) + 12px),calc(var(--app-h,100vh) - 190px));width:calc(100% - 20px);transition:bottom .2s ease}
+  body.live .nav{bottom:calc(18px + env(safe-area-inset-bottom))}
   .seg{width:100%}.seg button{flex:1;padding:16px 8px;font-size:17px}
   .acts{width:100%}.acts button{flex:1;padding:14px 8px;font-size:15px}
   .hud{font-size:14px}
@@ -124,12 +131,13 @@ aside{overflow:auto}
   .leaflet-control-attribution{font-size:9px}
   .toast{max-width:calc(100% - 24px);top:10px}
 }
-html,body{height:100dvh}
 </style>
 </head>
 <body>
 <div class="app">
-  <aside>
+  <aside id="sheet">
+    <div class="grab" id="grab" role="button" aria-label="패널 올리기/내리기"><i></i></div>
+    <div class="sheetbody">
     <div class="head"><h1>GPX 트래커 <small id="ver" style="font-weight:400;color:var(--muted)"></small></h1><button id="upd" title="최신 버전으로 업데이트 (저장된 주행기록은 유지됨)">↻ 업데이트</button></div>
     <div class="sec recdays" id="recdays" style="display:none"></div>
     <div class="sec">
@@ -151,6 +159,7 @@ html,body{height:100dvh}
     </details>
     <div class="stats"><span>경로 <b id="sTr">0</b>/<b id="sAll">0</b></span><span>거리 <b id="sKm">0</b> km</span><span>점 <b id="sPt">0</b></span></div>
     <div class="list" id="list"><div class="empty">GPX 파일을 불러오면 일자별 경로가 여기에 표시됩니다.</div></div>
+    </div>
   </aside>
   <div class="mapwrap"><div id="map"></div><div class="toast" id="toast"></div>
     <button class="locate" id="btnLocate" title="내 위치로 이동" aria-label="내 위치로 이동"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="6.5"/><circle cx="12" cy="12" r="1.8" fill="currentColor"/><path d="M12 1.5v4M12 18.5v4M1.5 12h4M18.5 12h4"/></svg></button>
@@ -170,6 +179,33 @@ html,body{height:100dvh}
 "use strict";
 const $=s=>document.querySelector(s);
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+/* ---------- 화면 높이 실측 + 바텀시트(모바일) ---------- */
+const mq=matchMedia("(max-width:760px)");
+const root=document.documentElement;
+let appH=innerHeight, sheetIdx=1, sheetH=0;
+const snaps=()=>[64,Math.round(appH*.42),Math.round(appH*.88)];   // 접힘 / 중간 / 펼침
+function applySheet(h){ sheetH=h==null?snaps()[sheetIdx]:h; root.style.setProperty("--sheet-h",sheetH+"px"); }
+function setAppH(){
+  appH=Math.round((window.visualViewport&&visualViewport.height)||innerHeight);
+  root.style.setProperty("--app-h",appH+"px"); applySheet();
+  try{ map.invalidateSize(); }catch(e){}
+}
+setAppH();
+addEventListener("resize",setAppH); addEventListener("orientationchange",()=>setTimeout(setAppH,200));
+if(window.visualViewport) visualViewport.addEventListener("resize",setAppH);
+(function(){
+  const grab=document.getElementById("grab"),sheet=document.getElementById("sheet");
+  let y0=0,h0=0,moved=false,drag=false;
+  grab.addEventListener("pointerdown",e=>{ drag=true; moved=false; y0=e.clientY; h0=sheetH; sheet.classList.add("drag"); grab.setPointerCapture(e.pointerId); });
+  grab.addEventListener("pointermove",e=>{ if(!drag) return; const dy=y0-e.clientY; if(Math.abs(dy)>5) moved=true; if(moved) applySheet(Math.max(64,Math.min(appH*.92,h0+dy))); });
+  const end=()=>{ if(!drag) return; drag=false; sheet.classList.remove("drag");
+    if(!moved){ sheetIdx=(sheetIdx+1)%3; }
+    else { const sn=snaps(); sheetIdx=sn.reduce((bi,v,i)=>Math.abs(v-sheetH)<Math.abs(sn[bi]-sheetH)?i:bi,0); }
+    applySheet(); setTimeout(()=>map.invalidateSize(),250); };
+  grab.addEventListener("pointerup",end); grab.addEventListener("pointercancel",end);
+})();
+const fit=(b,o={})=>map.fitBounds(b,{...o,paddingBottomRight:[0,(mq.matches&&mode==="view")?sheetH:0]});   // 시트에 가려지지 않게 여백
 
 /* ---------- 지도 ---------- */
 const BASES={
@@ -369,7 +405,7 @@ function select(id,zoom){
     const a=t.segs[0][0],z=t.segs[t.segs.length-1],zz=z[z.length-1];
     L.circleMarker([a[0],a[1]],{radius:7,color:"#fff",weight:2,fillColor:"#16a34a",fillOpacity:1}).bindTooltip("출발").addTo(hl);
     L.circleMarker([zz[0],zz[1]],{radius:7,color:"#fff",weight:2,fillColor:"#dc2626",fillOpacity:1}).bindTooltip("도착").addTo(hl);
-    if(zoom) map.fitBounds(t.group.getBounds().pad(.15),{maxZoom:15});
+    if(zoom) fit(t.group.getBounds().pad(.15),{maxZoom:15});
   }
   renderList();
 }
@@ -404,7 +440,7 @@ async function loadTexts(items,persist=true){           // items: [{name,text}]
   drawWpts();
   const b=L.latLngBounds([]);
   tracks.forEach(t=>t.group&&t.visible&&b.extend(t.group.getBounds()));
-  if(b.isValid()&&added){ if(mode!=="view"){ follow=false; refreshUi(); } map.fitBounds(b.pad(.05)); }   // 트래커 중 코스를 불러오면 코스 전체를 보여주고 따라가기는 해제
+  if(b.isValid()&&added){ if(mode!=="view"){ follow=false; refreshUi(); } fit(b.pad(.05)); }   // 트래커 중 코스를 불러오면 코스 전체를 보여주고 따라가기는 해제
   recLine.bringToFront();
   if(added) toast(`트랙 ${added}개 추가`);
 }
@@ -429,7 +465,7 @@ function removeFile(fid,quiet){
   assignColors(); applyVisibility(); renderFiles(); drawWpts();
   const b=L.latLngBounds([]);
   tracks.forEach(t=>t.group&&t.visible&&b.extend(t.group.getBounds()));
-  if(b.isValid()) map.fitBounds(b.pad(.05));
+  if(b.isValid()) fit(b.pad(.05));
   if(!quiet) toast(`${f?f.name:"파일"} 제거 (트랙 ${gone.length}개)`);
 }
 function drawWpts(){
@@ -545,7 +581,7 @@ function locateMe(){                         // 양쪽 탭 공통 "내 위치로
   if(!navigator.geolocation){ toast("이 브라우저는 위치 기능을 지원하지 않습니다."); return; }
   toast("내 위치 찾는 중…",8000);
   navigator.geolocation.getCurrentPosition(pos=>{          // 기록 탭: GPS는 꺼둔 채 한 번만 확인
-    const ll=placeMe(pos.coords); map.setView(ll,Math.max(map.getZoom(),16)); $("#toast").style.display="none";
+    const ll=placeMe(pos.coords); map.setView(ll,Math.max(map.getZoom(),16),{animate:false}); if(mq.matches) map.panBy([0,sheetH/2],{animate:false}); $("#toast").style.display="none";
   },onErr,{enableHighAccuracy:true,timeout:15000,maximumAge:5000});
 }
 function onErr(e){
@@ -639,7 +675,7 @@ $("#recdays").addEventListener("click",e=>{
   const r=e.target.closest(".rd"); if(!r) return;
   const segs=groupDays().get(r.dataset.d); if(!segs) return;
   if(recHidden.has(r.dataset.d)){ recHidden.delete(r.dataset.d); saveHidden(); drawRec(); renderRecDays(); }
-  map.fitBounds(L.latLngBounds(segs.flat().map(q=>[q[0],q[1]])).pad(.15),{maxZoom:16});
+  fit(L.latLngBounds(segs.flat().map(q=>[q[0],q[1]])).pad(.15),{maxZoom:16});
 });
 $("#seg").addEventListener("click",e=>{ const b=e.target.closest("[data-m]"); if(b) setMode(b.dataset.m); });
 $("#btnLoad").onclick=()=>$("#file").click();
@@ -648,7 +684,7 @@ setInterval(()=>{ if(mode!=="view") refreshUi(); },15000);   // 정차 시간 �
 map.on("dragstart",()=>{ if(follow&&mode!=="view"){ follow=false; refreshUi(); } });
 calcRecKm(); drawRec(); refreshUi(); renderRecDays();
 
-const APP_V="v9"; $("#ver").textContent=APP_V;
+const APP_V="v10"; $("#ver").textContent=APP_V;
 if("serviceWorker" in navigator && /^https?:$/.test(location.protocol)){
   const had=!!navigator.serviceWorker.controller;
   navigator.serviceWorker.register("sw.js").then(r=>r.update()).catch(()=>{});
