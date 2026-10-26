@@ -98,6 +98,8 @@ aside{overflow:auto}
 .rd .sw{width:10px;height:10px;border-radius:50%;flex:none}
 .rd .t{flex:1;min-width:0}.rd .d{font-weight:600}.rd .n{color:var(--muted);font-size:12px}
 .rd button{padding:6px 10px}
+.locate{position:absolute;right:12px;top:12px;z-index:1000;width:48px;height:48px;padding:0;border-radius:50%;display:flex;align-items:center;justify-content:center;background:var(--panel);box-shadow:0 4px 18px rgba(0,0,0,.3)}
+.locate.on{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
 .me{background:none;border:0}
 .mewrap{position:relative;width:28px;height:28px}
 .medot{position:absolute;inset:6px;border-radius:50%;background:#2563eb;border:3px solid #fff;box-shadow:0 0 6px rgba(0,0,0,.5)}
@@ -151,10 +153,11 @@ html,body{height:100dvh}
     <div class="list" id="list"><div class="empty">GPX 파일을 불러오면 일자별 경로가 여기에 표시됩니다.</div></div>
   </aside>
   <div class="mapwrap"><div id="map"></div><div class="toast" id="toast"></div>
+    <button class="locate" id="btnLocate" title="내 위치로 이동" aria-label="내 위치로 이동"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="6.5"/><circle cx="12" cy="12" r="1.8" fill="currentColor"/><path d="M12 1.5v4M12 18.5v4M1.5 12h4M18.5 12h4"/></svg></button>
     <div class="nav">
       <div class="hud" id="hud"></div>
       <div class="acts" id="acts">
-        <button id="btnLoad">📂 GPX 불러오기</button><button id="btnFollow">⌖ 따라가기</button>
+        <button id="btnLoad">📂 GPX 불러오기</button>
       </div>
       <div class="seg" id="seg"><button data-m="view" class="on">🗂 기록</button><button data-m="nav" class="rec">📍 트래커</button></div>
     </div>
@@ -507,16 +510,32 @@ function addRec(c,t){
   drawRec();
   if(rec.length%5===0) saveRec();
 }
-function onPos(pos){
-  const c=pos.coords, ll=[c.latitude,c.longitude];
+function placeMe(c){                        // 내 위치 점 + 정확도 원 + 방향
+  const ll=[c.latitude,c.longitude];
   lastFix={acc:c.accuracy,spd:c.speed};
   if(!map.hasLayer(me)){ meAcc.addTo(map); me.addTo(map); }
   me.setLatLng(ll); meAcc.setLatLng(ll).setRadius(c.accuracy||0);
   const w=me.getElement()&&me.getElement().firstChild;
   if(w){ const ok=c.heading!=null&&!isNaN(c.heading)&&(c.speed||0)>0.8; w.classList.toggle("hd",ok); if(ok) w.style.transform=`rotate(${c.heading}deg)`; }
+  return ll;
+}
+function onPos(pos){
+  const c=pos.coords, ll=placeMe(c);
   if(follow){ if(map.getZoom()<15) map.setView(ll,16,{animate:false}); else map.panTo(ll,{animate:false}); }
   addRec(c,pos.timestamp);                   // 트래커 중에는 항상 지나온 길 기록
   refreshUi();
+}
+function locateMe(){                         // 양쪽 탭 공통 "내 위치로 이동"
+  if(mode==="nav"){
+    follow=true; refreshUi();
+    if(lastFix&&map.hasLayer(me)) map.setView(me.getLatLng(),Math.max(map.getZoom(),16),{animate:false}); else toast("위치 찾는 중…",3000);
+    return;
+  }
+  if(!navigator.geolocation){ toast("이 브라우저는 위치 기능을 지원하지 않습니다."); return; }
+  toast("내 위치 찾는 중…",8000);
+  navigator.geolocation.getCurrentPosition(pos=>{          // 기록 탭: GPS는 꺼둔 채 한 번만 확인
+    const ll=placeMe(pos.coords); map.setView(ll,Math.max(map.getZoom(),16)); $("#toast").style.display="none";
+  },onErr,{enableHighAccuracy:true,timeout:15000,maximumAge:5000});
 }
 function onErr(e){
   if(e.code===1){ toast("위치 권한이 거부되었습니다. 브라우저 사이트 설정에서 위치를 허용해 주세요. (file:// 로 열면 막히는 브라우저가 있어 https 로 여는 것이 안전합니다)",9000); setMode("view"); }
@@ -558,7 +577,7 @@ function refreshUi(){
     hud.textContent=a+(rec.length?` · 기록 ${recKm.toFixed(1)}km`:"")+(idle>=1?` · 정차 ${idle>=60?Math.floor(idle/60)+"시간 "+idle%60:idle}분`:"");
   }
   acts.classList.toggle("show",live);
-  $("#btnFollow").hidden=!live||follow;
+  $("#btnLocate").classList.toggle("on",live&&follow);
 }
 function groupDays(){                       // 일자별 구간 묶음 (자정 넘으면 새 구간)
   const days=new Map(); let prev=null;
@@ -613,12 +632,12 @@ $("#recdays").addEventListener("click",e=>{
 });
 $("#seg").addEventListener("click",e=>{ const b=e.target.closest("[data-m]"); if(b) setMode(b.dataset.m); });
 $("#btnLoad").onclick=()=>$("#file").click();
-$("#btnFollow").onclick=()=>{ follow=true; if(lastFix&&me.getLatLng()) map.setView(me.getLatLng(),Math.max(map.getZoom(),16),{animate:false}); refreshUi(); };
+$("#btnLocate").onclick=locateMe;
 setInterval(()=>{ if(mode!=="view") refreshUi(); },15000);   // 정차 시간 갱신
 map.on("dragstart",()=>{ if(follow&&mode!=="view"){ follow=false; refreshUi(); } });
 calcRecKm(); drawRec(); refreshUi(); renderRecDays();
 
-const APP_V="v7"; $("#ver").textContent=APP_V;
+const APP_V="v8"; $("#ver").textContent=APP_V;
 if("serviceWorker" in navigator && /^https?:$/.test(location.protocol)){
   const had=!!navigator.serviceWorker.controller;
   navigator.serviceWorker.register("sw.js").then(r=>r.update()).catch(()=>{});
