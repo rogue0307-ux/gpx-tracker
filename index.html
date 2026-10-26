@@ -75,6 +75,7 @@ button.primary{background:var(--accent);color:var(--accent-ink);border-color:var
 .seg{display:flex;background:var(--panel);border:1px solid var(--line);border-radius:12px;box-shadow:0 4px 18px rgba(0,0,0,.25);overflow:hidden}
 .seg button{border:0;border-radius:0;padding:12px 20px;font-size:15px;font-weight:600;background:transparent}
 .seg button.on{background:var(--accent);color:var(--accent-ink)}
+.seg svg{width:17px;height:17px;margin-right:7px;vertical-align:-3px;flex:none}
 .seg button.on.rec{background:#dc2626;color:#fff}
 .hud{display:none;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:6px 12px;font-size:13px;box-shadow:0 4px 18px rgba(0,0,0,.25);font-variant-numeric:tabular-nums;text-align:center}
 .hud.show{display:block}
@@ -124,7 +125,7 @@ aside{display:flex;flex-direction:column;overflow:hidden}
   .item{padding:10px 14px}.month{padding:10px 14px}
   .nav{bottom:min(calc(var(--sheet-h,42%) + 12px),calc(var(--app-h,100vh) - 190px));width:calc(100% - 20px);transition:bottom .2s ease}
   body.live .nav{bottom:calc(18px + env(safe-area-inset-bottom))}
-  .seg{width:100%}.seg button{flex:1;padding:16px 8px;font-size:17px}
+  .seg{width:100%}.seg button{flex:1;padding:14px 8px;font-size:15px;letter-spacing:.2px}
   .acts{width:100%}.acts button{flex:1;padding:14px 8px;font-size:15px}
   .hud{font-size:14px}
   .leaflet-bar a{width:40px;height:40px;line-height:40px;font-size:20px}
@@ -166,9 +167,9 @@ aside{display:flex;flex-direction:column;overflow:hidden}
     <div class="nav">
       <div class="hud" id="hud"></div>
       <div class="acts" id="acts">
-        <button id="btnLoad">📂 GPX 불러오기</button>
+        <button id="btnLoad">GPX 불러오기</button>
       </div>
-      <div class="seg" id="seg"><button data-m="view" class="on">🗂 기록</button><button data-m="nav" class="rec">📍 트래커</button></div>
+      <div class="seg" id="seg"><button data-m="view" class="on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v4h4"/><path d="M12 7.5V12l3 2"/></svg>기록</button><button data-m="nav" class="rec"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 5 20l7-4 7 4z"/></svg>트래커</button></div>
     </div>
   </div>
 </div>
@@ -684,7 +685,7 @@ setInterval(()=>{ if(mode!=="view") refreshUi(); },15000);   // 정차 시간 �
 map.on("dragstart",()=>{ if(follow&&mode!=="view"){ follow=false; refreshUi(); } });
 calcRecKm(); drawRec(); refreshUi(); renderRecDays();
 
-const APP_V="v10"; $("#ver").textContent=APP_V;
+const APP_V="v11"; $("#ver").textContent=APP_V;
 if("serviceWorker" in navigator && /^https?:$/.test(location.protocol)){
   const had=!!navigator.serviceWorker.controller;
   navigator.serviceWorker.register("sw.js").then(r=>r.update()).catch(()=>{});
