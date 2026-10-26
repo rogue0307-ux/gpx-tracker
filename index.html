@@ -27,7 +27,8 @@ body{background:var(--bg);color:var(--ink);font:14px/1.45 system-ui,-apple-syste
 .app{display:grid;grid-template-columns:380px 1fr;height:100%}
 aside{background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
 .head{padding:14px 16px 10px;border-bottom:1px solid var(--line)}
-.head h1{font-size:16px;margin:0 0 8px}
+.head{display:flex;align-items:center;gap:8px}
+.head h1{font-size:16px;margin:0;flex:1}
 .drop{border:2px dashed var(--line);border-radius:10px;padding:14px;text-align:center;color:var(--muted);cursor:pointer;transition:.15s}
 .drop.over,.drop:hover{border-color:var(--accent);background:var(--hover);color:var(--ink)}
 .drop b{color:var(--ink)}
@@ -124,7 +125,7 @@ html,body{height:100dvh}
 <body>
 <div class="app">
   <aside>
-    <div class="head"><h1>GPX 트래커</h1></div>
+    <div class="head"><h1>GPX 트래커 <small id="ver" style="font-weight:400;color:var(--muted)"></small></h1><button id="upd" title="최신 버전으로 업데이트 (저장된 주행기록은 유지됨)">↻ 업데이트</button></div>
     <div class="sec recdays" id="recdays" style="display:none"></div>
     <div class="sec">
       <div class="sh">불러온 경로 (GPX)</div>
@@ -614,7 +615,17 @@ setInterval(()=>{ if(mode!=="view") refreshUi(); },15000);   // 정차 시간 �
 map.on("dragstart",()=>{ if(follow&&mode!=="view"){ follow=false; refreshUi(); } });
 calcRecKm(); drawRec(); refreshUi(); renderRecDays();
 
-if("serviceWorker" in navigator && /^https?:$/.test(location.protocol)) navigator.serviceWorker.register("sw.js").catch(()=>{});
+const APP_V="v5"; $("#ver").textContent=APP_V;
+if("serviceWorker" in navigator && /^https?:$/.test(location.protocol)){
+  const had=!!navigator.serviceWorker.controller;
+  navigator.serviceWorker.register("sw.js").then(r=>r.update()).catch(()=>{});
+  navigator.serviceWorker.addEventListener("controllerchange",()=>{ if(had&&!window.__rl){ window.__rl=1; saveRec(); location.reload(); } });   // 새 버전이 적용되면 한 번 자동 새로고침
+}
+$("#upd").onclick=async()=>{                  // 캐시만 비우고 다시 받기 (localStorage의 주행기록은 그대로)
+  toast("업데이트 중…",5000);
+  try{ for(const r of await navigator.serviceWorker.getRegistrations()) await r.unregister(); for(const k of await caches.keys()) await caches.delete(k); }catch(e){}
+  saveRec(); location.reload();
+};
 
 /* ---------- 자동 로드: http(s)로 열었을 때 ?src=a.gpx,b.gpx 또는 기본 경로 ---------- */
 (async function auto(){
