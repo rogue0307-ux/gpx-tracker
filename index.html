@@ -132,6 +132,7 @@ aside{display:flex;flex-direction:column;overflow:hidden}
   .leaflet-control-attribution{font-size:9px}
   .toast{max-width:calc(100% - 24px);top:10px}
 }
+.arr{background:none;border:0}
 </style>
 </head>
 <body>
@@ -311,13 +312,16 @@ function addTracks(list,fname,fid){
 /* ---------- 색상 ---------- */
 function assignColors(){
   const mode=$("#colorBy").value;
-  const dates=[...new Set(tracks.map(t=>t.date))].sort();
-  const months=[...new Set(tracks.map(t=>t.month))].sort();
+  // 날짜 정보 없는 트랙(시간·날짜 이름 없는 GPX)은 트랙마다 별개 키로 취급해 서로 다른 색을 준다
+  const dk=t=>t.date==="날짜 없음"?"~"+String(t.id).padStart(6,"0"):t.date;
+  const mk=t=>t.date==="날짜 없음"?dk(t):t.month;
+  const dates=[...new Set(tracks.map(dk))].sort();
+  const months=[...new Set(tracks.map(mk))].sort();
   const dark=baseSel.value.includes("어두운")||baseSel.value.includes("위성");
   for(const t of tracks){
     if(mode==="one") t.color=dark?"#ffd24a":"#e11d48";
-    else if(mode==="month"){ const i=months.indexOf(t.month); t.color=`hsl(${(i*47)%360} 75% ${dark?62:42}%)`; }
-    else { const i=dates.indexOf(t.date),f=dates.length>1?i/(dates.length-1):0; t.color=`hsl(${Math.round(260-f*260)} 80% ${dark?60:45}%)`; }
+    else if(mode==="month"){ const i=months.indexOf(mk(t)); t.color=`hsl(${(i*47)%360} 75% ${dark?62:42}%)`; }
+    else { const i=dates.indexOf(dk(t)),f=dates.length>1?i/(dates.length-1):0; t.color=`hsl(${Math.round(260-f*260)} 80% ${dark?60:45}%)`; }
   }
 }
 
@@ -356,13 +360,55 @@ function applyVisibility(){
   }
   $("#sTr").textContent=nTr; $("#sAll").textContent=tracks.length;
   $("#sKm").textContent=Math.round(km).toLocaleString(); $("#sPt").textContent=pt.toLocaleString();
-  renderList();
+  renderList(); drawArrows();
 }
 function recolor(){
   assignColors();
   for(const t of tracks){ if(t.group){ t.group.eachLayer(l=>l.setStyle({color:t.color})); t.link.eachLayer(l=>l.setStyle({color:t.color})); } }
-  renderList();
+  renderList(); drawArrows();
 }
+
+/* ---------- 진행 방향 화살표 (점 순서 = 이동 방향) ----------
+   화면에 보이는 영역의 트랙에만, 확대 수준에 맞는 간격(약 120px)으로 그린다. 너무 멀리서는 숨김. */
+const arrowLayer=L.layerGroup().addTo(map);
+const ARROW_MIN_ZOOM=9, ARROW_MAX=1500;
+function bearing(a,b){
+  const r=Math.PI/180,y=Math.sin((b[1]-a[1])*r)*Math.cos(b[0]*r);
+  const x=Math.cos(a[0]*r)*Math.sin(b[0]*r)-Math.sin(a[0]*r)*Math.cos(b[0]*r)*Math.cos((b[1]-a[1])*r);
+  return (Math.atan2(y,x)/r+360)%360;
+}
+function segCum(sg){                         // 누적 거리(km) 캐시
+  if(sg.cum) return sg.cum;
+  const c=new Float64Array(sg.length);
+  for(let i=1;i<sg.length;i++) c[i]=c[i-1]+hav(sg[i-1],sg[i]);
+  return sg.cum=c;
+}
+function drawArrows(){
+  arrowLayer.clearLayers();
+  const z=map.getZoom(); if(z<ARROW_MIN_ZOOM) return;
+  const bnd=map.getBounds().pad(.1), step=14400/Math.pow(2,z);     // km (위도 ~20° 기준 120px)
+  let n=0;
+  for(const t of tracks){
+    if(!t.visible||!t.group) continue;
+    const tb=t.group.getBounds(); if(!tb.isValid()||!bnd.intersects(tb)) continue;
+    const dot=t.segs[0][0];
+    if(bnd.contains([dot[0],dot[1]])) L.circleMarker([dot[0],dot[1]],{radius:4,color:"#fff",weight:1.5,fillColor:"#16a34a",fillOpacity:1,interactive:false}).addTo(arrowLayer);
+    for(const sg of t.segs){
+      if(sg.length<2) continue;
+      const cum=segCum(sg); let k=0;
+      for(let d=step/2;d<cum[cum.length-1];d+=step){
+        while(k<cum.length-1&&cum[k]<d) k++;
+        const p=sg[k]; if(!bnd.contains([p[0],p[1]])) continue;
+        let j=k+1; while(j<sg.length-1&&hav(p,sg[j])<0.03) j++;    // 30m 이상 앞의 점과 방위 계산
+        if(hav(p,sg[j])<0.005) continue;
+        L.marker([p[0],p[1]],{interactive:false,keyboard:false,icon:L.divIcon({className:"arr",iconSize:[16,16],iconAnchor:[8,8],
+          html:`<svg width="16" height="16" viewBox="-8 -8 16 16" style="transform:rotate(${bearing(p,sg[j]).toFixed(0)}deg)"><path d="M0-6.5L5 5.5L0 2.5L-5 5.5Z" fill="${t.color}" stroke="#fff" stroke-width="1.3" stroke-linejoin="round"/></svg>`})}).addTo(arrowLayer);
+        if(++n>=ARROW_MAX) return;
+      }
+    }
+  }
+}
+map.on("moveend",drawArrows);
 
 /* ---------- 목록 ---------- */
 function renderList(){
@@ -685,7 +731,7 @@ setInterval(()=>{ if(mode!=="view") refreshUi(); },15000);   // 정차 시간 �
 map.on("dragstart",()=>{ if(follow&&mode!=="view"){ follow=false; refreshUi(); } });
 calcRecKm(); drawRec(); refreshUi(); renderRecDays();
 
-const APP_V="v11"; $("#ver").textContent=APP_V;
+const APP_V="v13"; $("#ver").textContent=APP_V;
 if("serviceWorker" in navigator && /^https?:$/.test(location.protocol)){
   const had=!!navigator.serviceWorker.controller;
   navigator.serviceWorker.register("sw.js").then(r=>r.update()).catch(()=>{});
