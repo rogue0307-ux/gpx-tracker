@@ -134,7 +134,7 @@ html,body{height:100dvh}
     <div class="sec recdays" id="recdays" style="display:none"></div>
     <div class="sec">
       <div class="sh">불러온 경로 (GPX)</div>
-      <div class="drop" id="drop"><b>＋ GPX 파일 불러오기</b> (여러 개 선택 가능)<br><small id="fileinfo">로드된 파일 없음</small></div>
+      <div class="drop" id="drop"><b>＋ GPX 파일 불러오기</b> (여러 개 선택 가능 · 이 폰에 저장됨)<br><small id="fileinfo">로드된 파일 없음</small></div>
       <div id="filelist"></div>
       <input type="file" id="file" accept=".gpx,application/gpx+xml,text/xml" multiple hidden>
     </div>
@@ -376,17 +376,27 @@ function select(id,zoom){
 
 /* ---------- 파일 로드 ---------- */
 function toast(msg,ms=3500){ const el=$("#toast"); el.textContent=msg; el.style.display="block"; clearTimeout(toast.t); toast.t=setTimeout(()=>el.style.display="none",ms); }
-async function loadTexts(items){           // items: [{name,text}]
+/* ---------- 불러온 GPX 보관 (IndexedDB): 새로고침·앱 재시작 후에도 유지 ---------- */
+const idb=new Promise(res=>{ try{ const r=indexedDB.open("gpxv",1); r.onupgradeneeded=()=>r.result.createObjectStore("gpx",{keyPath:"name"}); r.onsuccess=()=>res(r.result); r.onerror=()=>res(null); }catch(e){ res(null); } });
+const dbDo=async(mode,fn)=>{ const db=await idb; if(!db) return null; return new Promise(res=>{ try{ const tx=db.transaction("gpx",mode),st=tx.objectStore("gpx"),rq=fn(st); tx.oncomplete=()=>res(rq&&rq.result); tx.onerror=tx.onabort=()=>res(null); }catch(e){ res(null); } }); };
+const dbPut=(name,text)=>dbDo("readwrite",st=>st.put({name,text}));
+const dbDel=name=>dbDo("readwrite",st=>st.delete(name));
+const dbClear=()=>dbDo("readwrite",st=>st.clear());
+const dbAll=async()=>(await dbDo("readonly",st=>st.getAll()))||[];
+
+async function loadTexts(items,persist=true){           // items: [{name,text}]
   let added=0;
   toast("읽는 중…",60000);
   await new Promise(r=>setTimeout(r,20));
   for(const it of items){
     try{
       const {trks,wpts:w}=parseGpx(it.text,it.name);
+      const dup=files.find(f=>f.name===it.name); if(dup) removeFile(dup.id,true);   // 같은 이름은 교체
       const list=normalize(trks,it.name);
       const fid=nextFid++;
       addTracks(list,it.name,fid); added+=list.length;
       w.forEach(p=>wpts.push([...p,fid])); files.push({id:fid,name:it.name});
+      if(persist) dbPut(it.name,it.text);
     }catch(err){ toast(String(err.message||err),6000); }
   }
   assignColors(); applyVisibility();
@@ -409,17 +419,18 @@ $("#filelist").addEventListener("click",e=>{
   const b=e.target.closest("[data-rm]"); if(!b) return;
   e.stopPropagation(); removeFile(+b.dataset.rm);
 });
-function removeFile(fid){
+function removeFile(fid,quiet){
   const gone=tracks.filter(t=>t.fid===fid);
   gone.forEach(t=>{ if(t.group){map.removeLayer(t.group);map.removeLayer(t.link);} if(t.id===selId){selId=null;hl.clearLayers();} });
   tracks=tracks.filter(t=>t.fid!==fid);
   wpts=wpts.filter(p=>p[3]!==fid);
   const f=files.find(x=>x.id===fid); files=files.filter(x=>x.id!==fid);
+  if(f) dbDel(f.name);
   assignColors(); applyVisibility(); renderFiles(); drawWpts();
   const b=L.latLngBounds([]);
   tracks.forEach(t=>t.group&&t.visible&&b.extend(t.group.getBounds()));
   if(b.isValid()) map.fitBounds(b.pad(.05));
-  toast(`${f?f.name:"파일"} 제거 (트랙 ${gone.length}개)`);
+  if(!quiet) toast(`${f?f.name:"파일"} 제거 (트랙 ${gone.length}개)`);
 }
 function drawWpts(){
   wptLayer.clearLayers();
@@ -443,7 +454,7 @@ $("#link").onchange=applyVisibility;
 baseSel.addEventListener("change",recolor);
 $("#reset").onclick=()=>{
   tracks.forEach(t=>{ if(t.group){map.removeLayer(t.group);map.removeLayer(t.link);} });
-  tracks=[];wpts=[];files=[];selId=null;hl.clearLayers();wptLayer.clearLayers();
+  tracks=[];wpts=[];files=[];selId=null;hl.clearLayers();wptLayer.clearLayers(); dbClear();
   renderFiles(); applyVisibility();
 };
 
@@ -637,7 +648,7 @@ setInterval(()=>{ if(mode!=="view") refreshUi(); },15000);   // 정차 시간 �
 map.on("dragstart",()=>{ if(follow&&mode!=="view"){ follow=false; refreshUi(); } });
 calcRecKm(); drawRec(); refreshUi(); renderRecDays();
 
-const APP_V="v8"; $("#ver").textContent=APP_V;
+const APP_V="v9"; $("#ver").textContent=APP_V;
 if("serviceWorker" in navigator && /^https?:$/.test(location.protocol)){
   const had=!!navigator.serviceWorker.controller;
   navigator.serviceWorker.register("sw.js").then(r=>r.update()).catch(()=>{});
@@ -648,6 +659,8 @@ $("#upd").onclick=async()=>{                  // 캐시만 비우고 다시 받�
   try{ for(const r of await navigator.serviceWorker.getRegistrations()) await r.unregister(); for(const k of await caches.keys()) await caches.delete(k); }catch(e){}
   saveRec(); location.reload();
 };
+
+dbAll().then(a=>{ if(a.length) loadTexts(a.map(x=>({name:x.name,text:x.text})),false); });   // 지난번에 불러온 GPX 복원
 
 /* ---------- 자동 로드: http(s)로 열었을 때 ?src=a.gpx,b.gpx 또는 기본 경로 ---------- */
 (async function auto(){
