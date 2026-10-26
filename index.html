@@ -567,7 +567,7 @@ const me=L.marker([0,0],{interactive:false,zIndexOffset:1000,
 function recSegs(){ const s=[]; let cur=null; for(const p of rec){ if(!cur||p[4]){cur=[];s.push(cur)} cur.push(p); } return s; }
 function calcRecKm(){ recKm=0; for(const s of recSegs()) for(let i=1;i<s.length;i++) recKm+=hav(s[i-1],s[i]); }
 function drawRec(){
-  const segs=[]; for(const [d,ss] of groupDays()) if(!recHidden.has(d)) segs.push(...ss);
+  const segs=[]; for(const [d,ss] of groupDays()) if(mode==="nav"||!recHidden.has(d)) segs.push(...ss);   // 트래커는 기록 탭 체크와 별개로 전부 표시
   recLine.setLatLngs(segs.map(s=>s.map(p=>[p[0],p[1]]))); recLine.bringToFront();
 }
 function saveRec(){
@@ -653,7 +653,7 @@ function setMode(m){
   if(m===mode) return;
   if(m!=="view" && !startWatch()) return;
   mode=m; follow=true;
-  if(m==="nav"){ recHidden.delete(dayOf(Date.now())); saveHidden(); drawRec(); }   // 트래커 중에는 오늘 기록을 항상 표시
+  drawRec();                                  // 탭별 표시 기준이 다르므로 전환 시 다시 그림
   if(m==="view"){ stopWatch(); saveRec(); renderRecDays(); }
   document.body.classList.toggle("live",m!=="view");
   document.querySelectorAll("#seg button").forEach(b=>b.classList.toggle("on",b.dataset.m===m));
@@ -731,7 +731,7 @@ setInterval(()=>{ if(mode!=="view") refreshUi(); },15000);   // 정차 시간 �
 map.on("dragstart",()=>{ if(follow&&mode!=="view"){ follow=false; refreshUi(); } });
 calcRecKm(); drawRec(); refreshUi(); renderRecDays();
 
-const APP_V="v13"; $("#ver").textContent=APP_V;
+const APP_V="v14"; $("#ver").textContent=APP_V;
 if("serviceWorker" in navigator && /^https?:$/.test(location.protocol)){
   const had=!!navigator.serviceWorker.controller;
   navigator.serviceWorker.register("sw.js").then(r=>r.update()).catch(()=>{});
