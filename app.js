@@ -183,6 +183,7 @@ function applyVisibility(){
   }
   $("#sTr").textContent=nTr; $("#sAll").textContent=tracks.length;
   $("#sKm").textContent=Math.round(km).toLocaleString(); $("#sPt").textContent=pt.toLocaleString();
+  drawWpts();
   if(selId!=null){ const st=tracks.find(x=>x.id===selId); if(!st||!st.visible){ selId=null; hl.clearLayers(); } }   // 선택한 트랙이 숨겨지면 출발/도착 마커도 같이 지운다
   renderList(); drawArrows();
 }
@@ -342,7 +343,8 @@ function removeFile(fid,quiet){
 }
 function drawWpts(){
   wptLayer.clearLayers();
-  wpts.forEach(p=>L.circleMarker([p[0],p[1]],{radius:5,color:"#fff",weight:1.5,fillColor:"#f59e0b",fillOpacity:1}).bindTooltip(esc(p[2]||"waypoint")).addTo(wptLayer));
+  const on=new Set(tracks.filter(t=>t.visible).map(t=>t.fid));   // 그 파일의 경로가 하나라도 켜져 있을 때만 웨이포인트 표시
+  wpts.filter(p=>on.has(p[3])).forEach(p=>L.circleMarker([p[0],p[1]],{radius:5,color:"#fff",weight:1.5,fillColor:"#f59e0b",fillOpacity:1}).bindTooltip(esc(p[2]||"waypoint")).addTo(wptLayer));
 }
 async function readFiles(fl){
   const items=[];
@@ -515,7 +517,7 @@ function refreshUi(){
   if(live){
     const a=lastFix?`정확도 ${Math.round(lastFix.acc)}m · ${lastFix.spd!=null?Math.round(lastFix.spd*3.6):0}km/h`:"위치 찾는 중…";
     const idle=rec.length&&lastFix?Math.floor((Date.now()-rec[rec.length-1][2])/60000):0;
-    hud.textContent=(recording?"● 기록 중 · ":"")+(headUp&&hdg==null?"방향 대기 · ":"")+a+(rec.length?` · 기록 ${recKm.toFixed(1)}km`:"")+(recording&&idle>=1?` · 정차 ${idle>=60?Math.floor(idle/60)+"시간 "+idle%60:idle}분`:"");
+    hud.textContent=(recording?"● 기록 중 · ":"")+(headUp?(hdg==null?"방향 대기 · ":`방향 ${Math.round(hdg)}° · `):"")+a+(rec.length?` · 기록 ${recKm.toFixed(1)}km`:"")+(recording&&idle>=1?` · 정차 ${idle>=60?Math.floor(idle/60)+"시간 "+idle%60:idle}분`:"");
   }
   const br=$("#btnRec"); br.textContent=recording?"■ 기록 종료":"● 기록 시작"; br.classList.toggle("recording",recording);
   acts.classList.toggle("show",live);
@@ -594,7 +596,7 @@ map.on("dragstart",()=>{ if(follow&&mode!=="view"){ follow=false; refreshUi(); }
 calcRecKm(); drawRec(); refreshUi(); renderRecDays();
 if(PAGE==="nav") setMode("nav");               // 트래커 페이지는 열자마자 내 위치 추적 시작
 
-const APP_V="v18"; $("#ver").textContent=APP_V;
+const APP_V="v19"; $("#ver").textContent=APP_V;
 if("serviceWorker" in navigator && /^https?:$/.test(location.protocol)){
   const had=!!navigator.serviceWorker.controller;
   navigator.serviceWorker.register("sw.js").then(r=>r.update()).catch(()=>{});
