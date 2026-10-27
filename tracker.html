@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GPX 트래커</title>
+<link rel="manifest" href="manifest.webmanifest?v=7">
+<meta name="theme-color" content="#0a0a0c">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png?v=7">
+<link rel="icon" type="image/png" sizes="512x512" href="icon-512.png?v=7">
+<link rel="shortcut icon" href="icon-192.png?v=7">
+<link rel="apple-touch-icon" href="icon-192.png?v=7">
+<link rel="stylesheet" href="lib/leaflet.css">
+<link rel="stylesheet" href="app.css">
+<body data-page="nav">
+<div class="app">
+  <aside id="sheet">
+    <div class="grab" id="grab" role="button" aria-label="패널 올리기/내리기"><i></i></div>
+    <div class="sheetbody">
+    <div class="head"><h1>트래커 <small id="ver" style="font-weight:400;color:var(--muted)"></small></h1><button id="upd" title="최신 버전으로 업데이트 (저장된 주행기록은 유지됨)">↻ 업데이트</button></div>
+    <div class="sec">
+      <div class="sh">계획 경로 (GPX)</div>
+      <div class="drop" id="drop"><b>＋ GPX 파일 불러오기</b> (여러 개 선택 가능 · 이 페이지에만 저장됨)<br><small id="fileinfo">로드된 파일 없음</small></div>
+      <div id="filelist"></div>
+      <input type="file" id="file" accept=".gpx,application/gpx+xml,text/xml" multiple hidden>
+    </div>
+    <div class="sec"><div class="row" style="margin-top:0"><label>지도</label><select id="base"></select></div></div>
+    </div>
+  </aside>
+  <div class="mapwrap"><div id="map"></div><div class="toast" id="toast"></div>
+    <button class="locate" id="btnLocate" title="내 위치로 이동" aria-label="내 위치로 이동"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="6.5"/><circle cx="12" cy="12" r="1.8" fill="currentColor"/><path d="M12 1.5v4M12 18.5v4M1.5 12h4M18.5 12h4"/></svg></button>
+    <button class="locate" id="btnNorth" title="북쪽 위 / 진행방향 위 전환" aria-label="북쪽 위 / 진행방향 위 전환"><svg id="northIcon" viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 4.5 15 12H9z" fill="#f97316" stroke="#f97316"/><path d="M12 19.5V12" /></svg></button>
+    <div class="nav">
+      <div class="hud" id="hud"></div>
+      <div class="acts" id="acts">
+        <button id="btnRec">● 기록 시작</button>
+      </div>
+      <div class="seg" id="seg"><button data-m="view" data-go="index.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v4h4"/><path d="M12 7.5V12l3 2"/></svg>기록</button><button data-m="nav" data-go="tracker.html" class="on rec"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 5 20l7-4 7 4z"/></svg>트래커</button></div>
+    </div>
+  </div>
+</div>
+
+<script src="lib/leaflet.js"></script>
+<script src="lib/leaflet-rotate.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
