@@ -183,6 +183,7 @@ function applyVisibility(){
   }
   $("#sTr").textContent=nTr; $("#sAll").textContent=tracks.length;
   $("#sKm").textContent=Math.round(km).toLocaleString(); $("#sPt").textContent=pt.toLocaleString();
+  if(selId!=null){ const st=tracks.find(x=>x.id===selId); if(!st||!st.visible){ selId=null; hl.clearLayers(); } }   // 선택한 트랙이 숨겨지면 출발/도착 마커도 같이 지운다
   renderList(); drawArrows();
 }
 function recolor(){
@@ -438,28 +439,36 @@ function placeMe(c){                        // 내 위치 점 + 정확도 원 + 
   return ll;
 }
 let headUp=false; try{ headUp=localStorage.getItem("gpxv.headup")==="1"; }catch(e){}
-function applyHeading(c){                    // 진행방향 위 모드: 이동 중(≥5km/h)일 때만 지도를 회전
-  if(!headUp||mode!=="nav"||!follow||c.heading==null||isNaN(c.heading)||(c.speed||0)<1.4) return;
-  const target=(360-c.heading)%360, cur=map.getBearing(); let d=Math.abs(target-cur); if(d>180) d=360-d;
+let hdg=null, hdgAnchor=null;                // 현재 진행방향(도) / 방향 계산 기준점
+function updateHeading(c,ll){                // GPS 방향값(≥3.6km/h) 우선, 없으면 직전 기준점에서 8m 넘게 움직였을 때 두 점의 방위
+  if(c.heading!=null&&!isNaN(c.heading)&&(c.speed||0)>=1){ hdg=c.heading; hdgAnchor=ll; return; }
+  if(!hdgAnchor){ hdgAnchor=ll; return; }
+  if(hav(hdgAnchor,ll)>=0.008){ hdg=bearing(hdgAnchor,ll); hdgAnchor=ll; }
+}
+function applyHeading(){                     // 진행방향 위 모드: 방향이 잡혀 있고 따라가는 중일 때 지도를 회전
+  if(!headUp||mode!=="nav"||!follow||hdg==null) return;
+  const target=(360-hdg)%360, cur=map.getBearing(); let d=Math.abs(target-cur); if(d>180) d=360-d;
   if(d>=4) map.setBearing(target);
 }
 function refreshNorth(){ $("#btnNorth").classList.toggle("on",headUp); }
 $("#btnNorth").onclick=()=>{
   headUp=!headUp; try{ localStorage.setItem("gpxv.headup",headUp?"1":"0"); }catch(e){}
   if(!headUp) map.setBearing(0);
-  refreshNorth(); toast(headUp?"진행방향이 위쪽 (이동 중 지도가 회전합니다)":"북쪽이 위쪽",2500);
+  else if(mode==="nav"){ follow=true; if(lastFix&&map.hasLayer(me)) map.setView(me.getLatLng(),Math.max(map.getZoom(),16),{animate:false}); applyHeading(); }
+  refreshNorth(); refreshUi();
+  toast(headUp?(hdg==null?"진행방향이 위쪽 — 조금 움직이면 방향이 잡혀 지도가 회전합니다":"진행방향이 위쪽"):"북쪽이 위쪽",3000);
 };
 map.on("rotate",()=>{ $("#northIcon").style.transform=`rotate(${map.getBearing()}deg)`; });
 refreshNorth();
 function onPos(pos){
-  const c=pos.coords; applyHeading(c); const ll=placeMe(c);
+  const c=pos.coords; updateHeading(c,[c.latitude,c.longitude]); applyHeading(); const ll=placeMe(c);
   if(follow){ if(map.getZoom()<15) map.setView(ll,16,{animate:false}); else map.panTo(ll,{animate:false}); }
   if(recording) addRec(c,pos.timestamp);     // "기록 시작" 중일 때만 지나온 길 기록
   refreshUi();
 }
 function locateMe(){                         // 양쪽 탭 공통 "내 위치로 이동"
   if(mode==="nav"){
-    follow=true; refreshUi();
+    follow=true; refreshUi(); applyHeading();
     if(lastFix&&map.hasLayer(me)) map.setView(me.getLatLng(),Math.max(map.getZoom(),16),{animate:false}); else toast("위치 찾는 중…",3000);
     return;
   }
@@ -506,7 +515,7 @@ function refreshUi(){
   if(live){
     const a=lastFix?`정확도 ${Math.round(lastFix.acc)}m · ${lastFix.spd!=null?Math.round(lastFix.spd*3.6):0}km/h`:"위치 찾는 중…";
     const idle=rec.length&&lastFix?Math.floor((Date.now()-rec[rec.length-1][2])/60000):0;
-    hud.textContent=(recording?"● 기록 중 · ":"")+a+(rec.length?` · 기록 ${recKm.toFixed(1)}km`:"")+(recording&&idle>=1?` · 정차 ${idle>=60?Math.floor(idle/60)+"시간 "+idle%60:idle}분`:"");
+    hud.textContent=(recording?"● 기록 중 · ":"")+(headUp&&hdg==null?"방향 대기 · ":"")+a+(rec.length?` · 기록 ${recKm.toFixed(1)}km`:"")+(recording&&idle>=1?` · 정차 ${idle>=60?Math.floor(idle/60)+"시간 "+idle%60:idle}분`:"");
   }
   const br=$("#btnRec"); br.textContent=recording?"■ 기록 종료":"● 기록 시작"; br.classList.toggle("recording",recording);
   acts.classList.toggle("show",live);
@@ -585,7 +594,7 @@ map.on("dragstart",()=>{ if(follow&&mode!=="view"){ follow=false; refreshUi(); }
 calcRecKm(); drawRec(); refreshUi(); renderRecDays();
 if(PAGE==="nav") setMode("nav");               // 트래커 페이지는 열자마자 내 위치 추적 시작
 
-const APP_V="v17"; $("#ver").textContent=APP_V;
+const APP_V="v18"; $("#ver").textContent=APP_V;
 if("serviceWorker" in navigator && /^https?:$/.test(location.protocol)){
   const had=!!navigator.serviceWorker.controller;
   navigator.serviceWorker.register("sw.js").then(r=>r.update()).catch(()=>{});
