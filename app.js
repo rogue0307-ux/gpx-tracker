@@ -341,10 +341,25 @@ function removeFile(fid,quiet){
   if(b.isValid()) fit(b.pad(.05));
   if(!quiet) toast(`${f?f.name:"파일"} 제거 (트랙 ${gone.length}개)`);
 }
+const WPT_NEAR_KM=1.0;
+function nearTrack(p,t){                     // 점 p(위경도)와 트랙 선분들 사이 최단거리 ≤ WPT_NEAR_KM ?
+  const kx=Math.cos(p[0]*Math.PI/180)*111.32, ky=110.57, pad=WPT_NEAR_KM/ky;
+  for(const sg of t.segs){
+    for(let i=1;i<sg.length;i++){
+      const a=sg[i-1], b=sg[i];
+      if(Math.abs(a[0]-p[0])>pad&&Math.abs(b[0]-p[0])>pad) continue;     // 위도 차가 크면 건너뜀
+      const ax=(a[1]-p[1])*kx, ay=(a[0]-p[0])*ky, bx=(b[1]-p[1])*kx, by=(b[0]-p[0])*ky;
+      const dx=bx-ax, dy=by-ay, l2=dx*dx+dy*dy;
+      const u=l2?Math.max(0,Math.min(1,-(ax*dx+ay*dy)/l2)):0;
+      if(Math.hypot(ax+u*dx,ay+u*dy)<=WPT_NEAR_KM) return true;
+    }
+  }
+  return false;
+}
 function drawWpts(){
   wptLayer.clearLayers();
-  const on=new Set(tracks.filter(t=>t.visible).map(t=>t.fid));   // 그 파일의 경로가 하나라도 켜져 있을 때만 웨이포인트 표시
-  wpts.filter(p=>on.has(p[3])).forEach(p=>L.circleMarker([p[0],p[1]],{radius:5,color:"#fff",weight:1.5,fillColor:"#f59e0b",fillOpacity:1}).bindTooltip(esc(p[2]||"waypoint")).addTo(wptLayer));
+  const vis=tracks.filter(t=>t.visible);   // 웨이포인트는 트랙 소속 정보가 없어서, 지금 보이는 트랙 경로 가까이(WPT_NEAR_KM)에 있는 것만 표시
+  wpts.filter(p=>vis.some(t=>t.fid===p[3]&&nearTrack(p,t))).forEach(p=>L.circleMarker([p[0],p[1]],{radius:5,color:"#fff",weight:1.5,fillColor:"#f59e0b",fillOpacity:1}).bindTooltip(esc(p[2]||"waypoint")).addTo(wptLayer));
 }
 async function readFiles(fl){
   const items=[];
@@ -596,7 +611,7 @@ map.on("dragstart",()=>{ if(follow&&mode!=="view"){ follow=false; refreshUi(); }
 calcRecKm(); drawRec(); refreshUi(); renderRecDays();
 if(PAGE==="nav") setMode("nav");               // 트래커 페이지는 열자마자 내 위치 추적 시작
 
-const APP_V="v21"; $("#ver").textContent=APP_V;
+const APP_V="v0.22"; $("#ver").textContent=APP_V;
 if("serviceWorker" in navigator && /^https?:$/.test(location.protocol)){
   const had=!!navigator.serviceWorker.controller;
   navigator.serviceWorker.register("sw.js").then(r=>r.update()).catch(()=>{});
