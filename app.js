@@ -521,14 +521,24 @@ $("#btnNorth").onclick=()=>{
 };
 map.on("rotate",()=>{ setMeArrow(); $("#northIcon").style.transform=`rotate(${map.getBearing()}deg)`; });
 refreshNorth();
+let zoomedOnce=false;
+function fitAllTracks(){                     // 불러온 GPX 경로 전체(+내 위치)가 보이게
+  const b=L.latLngBounds([]); tracks.forEach(t=>t.group&&t.visible&&b.extend(t.group.getBounds()));
+  if(lastFix&&map.hasLayer(me)) b.extend(me.getLatLng());
+  if(b.isValid()) fit(b.pad(.05)); else toast("불러온 경로가 없습니다.");
+}
 function onPos(pos){
   const c=pos.coords; updateHeading(c,[c.latitude,c.longitude]); applyHeading(); const ll=placeMe(c); wxPosUpdate(ll);
-  if(follow){ if(map.getZoom()<15) map.setView(ll,16,{animate:false}); else map.panTo(ll,{animate:false}); if(headUp&&mode==="nav") recenter(ll); }
+  if(follow){ if(!zoomedOnce&&map.getZoom()<15) map.setView(ll,16,{animate:false}); else map.panTo(ll,{animate:false}); zoomedOnce=true; if(headUp&&mode==="nav") recenter(ll); }   // 첫 위치에서만 확대(이후 사용자가 줌을 바꿔도 되돌리지 않음)
   if(recording) addRec(c,pos.timestamp);     // "기록 시작" 중일 때만 지나온 길 기록
   refreshUi();
 }
 function locateMe(){                         // 양쪽 탭 공통 "내 위치로 이동"
   if(mode==="nav"){
+    if(follow){                              // 켜져 있으면 끄기 → 전체 경로 보기(지도는 북쪽 위로)
+      follow=false; map.setBearing(0); fitAllTracks(); refreshUi();
+      toast("전체 경로 보기 — 내 위치 버튼을 다시 누르면 내 위치로 돌아갑니다",3500); return;
+    }
     follow=true; refreshUi(); applyHeading();
     if(lastFix&&map.hasLayer(me)) map.setView(me.getLatLng(),Math.max(map.getZoom(),16),{animate:false}); else toast("위치 찾는 중…",3000);
     return;
@@ -675,7 +685,7 @@ map.on("dragstart",()=>{ if(follow&&mode!=="view"){ follow=false; refreshUi(); }
 calcRecKm(); drawRec(); refreshUi(); renderRecDays();
 if(PAGE==="nav") setMode("nav");               // 트래커 페이지는 열자마자 내 위치 추적 시작
 
-const APP_V="v0.42"; $("#ver").textContent=APP_V;
+const APP_V="v0.43"; $("#ver").textContent=APP_V;
 if("serviceWorker" in navigator && /^https?:$/.test(location.protocol)){
   const had=!!navigator.serviceWorker.controller;
   navigator.serviceWorker.register("sw.js").then(r=>r.update()).catch(()=>{});
