@@ -9,8 +9,8 @@ const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",
 const mq=matchMedia("(max-width:760px)");
 const root=document.documentElement;
 let appH=innerHeight, sheetIdx=PAGE==="nav"?0:1, sheetH=0;
-const snaps=()=>[64,Math.round(appH*.42),Math.round(appH*.88)];   // 접힘 / 중간 / 펼침
-function applySheet(h){ sheetH=h==null?snaps()[sheetIdx]:h; root.style.setProperty("--sheet-h",sheetH+"px"); }
+const snaps=()=>[PAGE==="nav"?0:64,Math.round(appH*.6)];   // 접힘(Tracking은 완전히 숨김) / 펼침
+function applySheet(h){ sheetH=h==null?snaps()[sheetIdx]:h; root.style.setProperty("--sheet-h",sheetH+"px"); const sh=document.getElementById("sheet"); if(sh) sh.style.visibility=sheetH<=0?"hidden":""; }
 function setAppH(){
   appH=Math.round((window.visualViewport&&visualViewport.height)||innerHeight);
   root.style.setProperty("--app-h",appH+"px"); applySheet();
@@ -19,24 +19,26 @@ function setAppH(){
 setAppH();
 addEventListener("resize",setAppH); addEventListener("orientationchange",()=>setTimeout(setAppH,200));
 if(window.visualViewport) visualViewport.addEventListener("resize",setAppH);
-(function(){
-  const grab=document.getElementById("grab"),sheet=document.getElementById("sheet");
-  let y0=0,h0=0,moved=false,drag=false;
-  grab.addEventListener("pointerdown",e=>{ drag=true; moved=false; y0=e.clientY; h0=sheetH; sheet.classList.add("drag"); grab.setPointerCapture(e.pointerId); });
-  grab.addEventListener("pointermove",e=>{ if(!drag) return; const dy=y0-e.clientY; if(Math.abs(dy)>5) moved=true; if(moved) applySheet(Math.max(64,Math.min(appH*.92,h0+dy))); });
-  const end=()=>{ if(!drag) return; drag=false; sheet.classList.remove("drag");
-    if(!moved){ sheetIdx=(sheetIdx+1)%3; }
-    else { const sn=snaps(); sheetIdx=sn.reduce((bi,v,i)=>Math.abs(v-sheetH)<Math.abs(sn[bi]-sheetH)?i:bi,0); }
-    applySheet(); setTimeout(()=>map.invalidateSize(),250); };
-  grab.addEventListener("pointerup",end); grab.addEventListener("pointercancel",end);
+(function(){                                 // 하단 패널: 슬라이드 없이 버튼으로 열고 닫기
+  const grab=document.getElementById("grab"), txt=document.getElementById("grabTxt");
+  const upd=()=>{ grab.classList.toggle("open",sheetIdx===1); if(txt) txt.textContent=sheetIdx===1?"닫기":"설정 · 경로 · 지도"; };
+  grab.addEventListener("click",()=>{ sheetIdx=sheetIdx===0?1:0; applySheet(); upd(); setTimeout(()=>map.invalidateSize(),250); });
+  const stg=document.getElementById("btnSettings");     // 옵션 메뉴 > 설정 · 경로 · 지도
+  if(stg) stg.addEventListener("click",()=>{ sheetIdx=1; applySheet(); upd(); setTimeout(()=>map.invalidateSize(),250); });
+  upd();
+})();
+(function(){                                 // 우측 하단 옵션 버튼 → 메뉴
+  const opt=$("#btnOpt"), menu=$("#menu"); if(!opt||opt.tagName==="INPUT"||!menu||menu.tagName==="INPUT") return;
+  opt.addEventListener("click",e=>{ e.stopPropagation(); menu.hidden=!menu.hidden; });
+  menu.addEventListener("click",()=>{ setTimeout(()=>{ menu.hidden=true; },0); });
+  document.addEventListener("click",e=>{ if(!menu.hidden&&!menu.contains(e.target)) menu.hidden=true; });
 })();
 const fit=(b,o={})=>map.fitBounds(b,{...o,paddingBottomRight:[0,mq.matches?sheetH:0]});   // 시트에 가려지지 않게 여백
 
 /* ---------- 지도 ---------- */
 const BASES={
-  "거리 지도 (Esri)":["https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}","Esri, HERE, Garmin, OSM contributors"],
+  "오프라인 지도":["https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}","Esri, HERE, Garmin"],
   "밝은 회색 (Esri)":["https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}","Esri, HERE, Garmin"],
-  "어두운 회색 (Esri)":["https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}","Esri, HERE, Garmin"],
   "OpenStreetMap":["https://tile.openstreetmap.org/{z}/{x}/{y}.png","© OpenStreetMap contributors"],
   "위성 (Esri)":["https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}","Esri, Maxar"],
   "위성 + 지명 (Esri)":["https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}","Esri, Maxar",
@@ -47,15 +49,29 @@ const map=L.map("map",{preferCanvas:true,zoomSnap:0.5,rotate:true,bearing:0,touc
 let baseLayer=null;
 const baseSel=$("#base");
 Object.keys(BASES).forEach(k=>baseSel.add(new Option(k,k)));
+const OFFLINE_KEY="오프라인 지도";            // 오프라인으로 저장하는 지도는 이 한 가지뿐
+let tileErr=0, tileErrT=0;
+function tileFail(){                         // 타일이 연달아 실패(인터넷 끊김·불안정)하면 저장해 둔 오프라인 지도로 자동 전환
+  const now=Date.now(); if(now-tileErrT>10000) tileErr=0; tileErrT=now;
+  if(++tileErr<6) return;
+  if(baseSel.value!==OFFLINE_KEY){ tileErr=0; baseSel.value=OFFLINE_KEY; setBase(OFFLINE_KEY); toast("인터넷이 불안정해 저장된 오프라인 지도로 전환했습니다.",5000); }
+}
+
+(async()=>{                                  // 예전에 받은 다른 종류 타일(거리 지도)은 한 번만 정리해 용량 회수
+  try{ if(localStorage.getItem("gpx.tilesclean")==="dark") return; const c=await caches.open("gpx-tiles");
+    for(const r of await c.keys()) if(!r.url.includes("World_Dark_Gray")) await c.delete(r);
+    localStorage.setItem("gpx.tilesclean","dark"); try{ offStatus(); }catch(e){} }catch(e){}
+})();
 function setBase(k){
   if(baseLayer) baseLayer.eachLayer ? baseLayer.eachLayer(l=>map.removeLayer(l)) : map.removeLayer(baseLayer);
-  baseLayer=L.tileLayer(BASES[k][0],{attribution:BASES[k][1],maxZoom:19,maxNativeZoom:k.includes("회색")?16:19}).addTo(map);
+  baseLayer=L.tileLayer(BASES[k][0],{attribution:BASES[k][1],maxZoom:19,maxNativeZoom:k===OFFLINE_KEY?15:(/Canvas\//.test(BASES[k][0])?16:19)}).on("tileerror",tileFail).addTo(map);
   if(BASES[k][2]) baseLayer=L.layerGroup([baseLayer,L.tileLayer(BASES[k][2],{maxZoom:19,maxNativeZoom:16,pane:"shadowPane"}).addTo(map)]);
   else baseLayer.bringToBack();
   try{localStorage.setItem(PFX+"base",k)}catch(e){}
 }
 let savedBase=null;try{savedBase=localStorage.getItem(PFX+"base")}catch(e){}
-if(!BASES[savedBase]) savedBase=matchMedia("(prefers-color-scheme: dark)").matches?"어두운 회색 (Esri)":"거리 지도 (Esri)";
+if(savedBase==="거리 지도 (Esri)"||savedBase==="어두운 회색 (Esri)") savedBase=OFFLINE_KEY;      // 예전 이름 호환
+if(!BASES[savedBase]) savedBase=OFFLINE_KEY;
 baseSel.value=savedBase; setBase(savedBase);
 baseSel.onchange=()=>setBase(baseSel.value);
 
@@ -140,7 +156,7 @@ function assignColors(){
   const mk=t=>t.date==="날짜 없음"?dk(t):t.month;
   const dates=[...new Set(tracks.map(dk))].sort();
   const months=[...new Set(tracks.map(mk))].sort();
-  const dark=baseSel.value.includes("어두운")||baseSel.value.includes("위성");
+  const dark=baseSel.value===OFFLINE_KEY||baseSel.value.includes("위성");
   for(const t of tracks){
     if(mode==="one") t.color=dark?"#ffd24a":"#7c3aed";
     else if(mode==="month"){ const i=months.indexOf(mk(t)); t.color=`hsl(${150+(i*47)%140} 75% ${dark?62:42}%)`; }
@@ -611,7 +627,7 @@ function refreshUi(){
     const idle=rec.length&&lastFix?Math.floor((Date.now()-rec[rec.length-1][2])/60000):0;
     hud.textContent=(recording?"● 기록 중 · ":"")+(headUp?(hdg==null?"방향 대기 · ":`방향 ${Math.round(hdg)}°${hdgSrc?"("+hdgSrc+")":""} · `):"")+a+(rec.length?` · 기록 ${recKm.toFixed(1)}km`:"")+(recording&&idle>=1?` · 정차 ${idle>=60?Math.floor(idle/60)+"시간 "+idle%60:idle}분`:"");
   }
-  const br=$("#btnRec"); br.textContent=recording?"■ 기록 종료":"● 기록 시작"; br.classList.toggle("recording",recording);
+  const br=$("#btnRec"); br.textContent=recording?"■ 기록 종료":"● 기록 시작"; br.classList.toggle("recording",recording); $("#btnOpt").classList.toggle("rec",recording);
   acts.classList.toggle("show",live);
   $("#btnLocate").classList.toggle("on",live&&follow);
 }
@@ -690,7 +706,7 @@ map.on("dragstart",()=>{ if(follow&&mode!=="view"){ follow=false; refreshUi(); }
 calcRecKm(); drawRec(); refreshUi(); renderRecDays();
 if(PAGE==="nav") setMode("nav");               // 트래커 페이지는 열자마자 내 위치 추적 시작
 
-const APP_V="v0.51"; $("#ver").textContent=APP_V;
+const APP_V="v0.58"; $("#ver").textContent=APP_V;
 if("serviceWorker" in navigator && /^https?:$/.test(location.protocol)){
   const had=!!navigator.serviceWorker.controller;
   navigator.serviceWorker.register("sw.js").then(r=>r.update()).catch(()=>{});
@@ -725,24 +741,25 @@ function tileUrls(tpl){
   return [...set.values()].map(([z,x,y])=>tpl.replace("{z}",z).replace("{x}",x).replace("{y}",y));
 }
 async function offStatus(){
-  try{ const c=await caches.open("gpx-tiles"); const n=(await c.keys()).length; $("#offinfo").textContent=n?`저장된 지도 ${n.toLocaleString()}장 (인터넷 없이도 표시)`:"저장된 지도 없음"; return n; }catch(e){ $("#offinfo").textContent="이 브라우저는 오프라인 지도 저장을 지원하지 않음"; return 0; }
+  try{ const c=await caches.open("gpx-tiles"); const n=(await c.keys()).length; $("#offinfo").textContent=n?`저장됨: 경로 양옆 반경 최대 25km (상세 확대 시 약 1~3km) · 약 ${Math.max(1,Math.round(n*5.3/1024))}MB · 인터넷 없이도 표시`:"저장된 지도 없음"; return n; }catch(e){ $("#offinfo").textContent="이 브라우저는 오프라인 지도 저장을 지원하지 않음"; return 0; }
 }
 let offBusy=false;
 async function offDownload(){
   if(offBusy) return;
   if(!tracks.length){ toast("먼저 위에서 GPX 파일을 불러오세요."); return; }
   if(!navigator.onLine){ toast("인터넷 연결 상태에서 받아야 합니다."); return; }
-  const k=baseSel.value, tpls=BASES[k].slice(0,1).concat(BASES[k][2]?[BASES[k][2]]:[]);
+  const k=OFFLINE_KEY, tpls=[BASES[k][0]];
   let urls=[]; for(const t of tpls) urls=urls.concat(tileUrls(t));
-  if(!confirm(`경로 주변 지도 ${urls.length.toLocaleString()}장(약 ${Math.round(urls.length*25/1024)}MB)을 저장합니다.
-선택된 지도: ${k}
+  if(!confirm(`경로 양옆 반경 최대 25km까지 지도를 저장합니다.
+(확대할수록 범위가 좁아져 상세 지도는 경로 양옆 약 1~3km)
+저장되는 지도: ${k} · 약 ${Math.max(1,Math.round(urls.length*5.3/1024))}MB
 Wi-Fi 권장. 계속할까요?`)) return;
   offBusy=true; const btn=$("#btnOff"); btn.disabled=true;
   const c=await caches.open("gpx-tiles"); let done=0, fail=0, idx=0;
   async function worker(){
     while(idx<urls.length){ const u=urls[idx++];
       try{ if(!(await c.match(u))){ let r; try{ r=await fetch(u); }catch(e){ r=await fetch(u,{mode:"no-cors"}); } if(r.ok||r.type==="opaque") await c.put(u,r); else fail++; } }catch(e){ fail++; }
-      done++; if(done%25===0||done===urls.length) $("#offinfo").textContent=`받는 중 ${done.toLocaleString()} / ${urls.length.toLocaleString()}${fail?` (실패 ${fail})`:""}`;
+      done++; if(done%25===0||done===urls.length) $("#offinfo").textContent=`받는 중 ${Math.round(done*100/urls.length)}%${fail?` (실패 ${fail})`:""}`;
     } }
   await Promise.all(Array.from({length:6},worker));
   offBusy=false; btn.disabled=false; await offStatus();

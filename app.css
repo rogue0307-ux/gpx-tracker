@@ -101,8 +101,8 @@ body.live #btnNorth{display:flex}
   aside{position:absolute;left:0;right:0;bottom:0;height:var(--sheet-h,42%);z-index:1100;border:0;border-radius:18px 18px 0 0;
     box-shadow:0 -6px 24px rgba(0,0,0,.35);transition:height .2s ease}
   aside.drag{transition:none}
-  .grab{display:flex;justify-content:center;padding:12px 0 8px;touch-action:none;cursor:grab;flex:none}
-  .grab i{width:48px;height:5px;border-radius:3px;background:var(--muted);opacity:.6}
+  .grab{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;padding:12px 0 8px;background:none;border:0;border-radius:0;color:var(--ink);font-size:14px;font-weight:600;cursor:pointer;flex:none}
+  .grab svg{transition:transform .2s}.grab.open svg{transform:rotate(180deg)}
   .sheetbody{padding-bottom:env(safe-area-inset-bottom)}
   input[type=text],input[type=date],input[type=number],select{font-size:16px;padding:8px 10px}   /* iOS 확대 방지 + 터치 */
   button{padding:9px 14px}
@@ -134,3 +134,18 @@ body.live #btnNorth{display:flex}
 #dimGo{width:min(66vw,44vh);height:auto}
 #dimDir{text-align:center;line-height:1.35}
 #dimWx{font-size:20px;opacity:.75;text-align:center;max-width:92vw;line-height:1.35;min-height:1px}
+
+/* Tracking 메인 화면: 하단은 상태줄 + 우측 하단 옵션 버튼(메뉴로 기록·절전·설정·History) */
+.nav.nav2{left:10px;right:10px;transform:none;width:auto;max-width:none;flex-direction:row;align-items:flex-end;justify-content:space-between;gap:10px;bottom:calc(var(--sheet-h,0px) + 14px)}
+.nav2 .hud{flex:1;min-width:0;text-align:left;font-size:13px;align-self:flex-end;margin-bottom:6px}
+.fab{flex:none;margin-left:auto;width:54px;height:54px;border-radius:50%;padding:0!important;display:flex;align-items:center;justify-content:center;background:var(--panel);border:1px solid var(--line);box-shadow:0 4px 18px rgba(0,0,0,.4);color:var(--ink)}
+.fab.rec{background:#dc2626;border-color:#dc2626;color:#fff}
+.menu{position:absolute;right:0;bottom:64px;min-width:220px;background:var(--panel);border:1px solid var(--line);border-radius:14px;box-shadow:0 8px 28px rgba(0,0,0,.5);padding:6px;display:flex;flex-direction:column;gap:2px;z-index:1200}
+.menu[hidden]{display:none}
+.menu button{width:100%;text-align:left;padding:14px;font-size:15px;background:transparent;border:0;border-radius:10px;box-shadow:none;color:var(--ink)}
+.menu .acts{display:flex;flex-direction:column;gap:2px;width:100%}
+.menu .acts button{flex:none;padding:14px;font-size:15px;box-shadow:none;background:transparent;text-align:left}
+.menu .acts button.recording{background:#dc2626;color:#fff}
+.menu .seg{display:block;width:100%;background:transparent;border:0;box-shadow:none;border-radius:0}
+.menu .seg button{flex:none;display:block;width:100%;padding:14px;text-align:left;font-size:15px;background:transparent}
+.menu .seg button svg{margin-right:8px}
