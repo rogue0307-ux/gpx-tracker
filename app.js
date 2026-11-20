@@ -169,6 +169,7 @@ function popupHtml(t){
   return `<b>${esc(t.name)}</b><br>${f(t.t0)} ~ ${f(t.t1)}<br>${t.km.toFixed(1)} km · ${t.pts.toLocaleString()}점 · 구간 ${t.segs.length}`;
 }
 function applyVisibility(){
+  setTimeout(()=>{ try{ bringRecFront(); }catch(e){} },0);
   const q=$("#q").value.trim().toLowerCase(),from=$("#from").value,to=$("#to").value,minkm=+$("#minkm").value||0;
   const link=$("#link").checked;
   let nTr=0,km=0,pt=0;
@@ -227,7 +228,7 @@ function drawArrows(){
         const p=sg[k]; if(!bnd.contains([p[0],p[1]])) continue;
         let j=k+1; while(j<sg.length-1&&hav(p,sg[j])<0.03) j++;    // 30m 이상 앞의 점과 방위 계산
         if(hav(p,sg[j])<0.005) continue;
-        L.marker([p[0],p[1]],{interactive:false,keyboard:false,icon:L.divIcon({className:"arr",iconSize:[16,16],iconAnchor:[8,8],
+        L.marker([p[0],p[1]],{interactive:false,keyboard:false,rotateWithView:true,icon:L.divIcon({className:"arr",iconSize:[16,16],iconAnchor:[8,8],
           html:`<svg width="16" height="16" viewBox="-8 -8 16 16" style="transform:rotate(${bearing(p,sg[j]).toFixed(0)}deg)"><path d="M0-6.5L5 5.5L0 2.5L-5 5.5Z" fill="${t.color}" stroke="#fff" stroke-width="1.3" stroke-linejoin="round"/></svg>`})}).addTo(arrowLayer);
         if(++n>=ARROW_MAX) return;
       }
@@ -401,18 +402,18 @@ try{
   const old=localStorage.getItem("gpxv.rec");   // 이전 단일 키 → 일자별로 이전
   if(old){ const a=JSON.parse(old); if(Array.isArray(a)&&a.length){ rec.push(...a); rec.sort((x,y)=>x[2]-y[2]); rec.forEach(q=>dirty.add(dayOf(q[2]))); } localStorage.removeItem("gpxv.rec"); }
 }catch(e){}
-map.createPane("recPane").style.zIndex=450;                 // 내 이동 기록은 GPX 경로(400) 위 최상단 층 — 경로를 잘 따라가는지 한눈에 확인
-const recCase=L.polyline([],{pane:"recPane",color:"#fff",weight:8,opacity:.95,dashArray:"11 5 3 5",lineCap:"butt",lineJoin:"round",interactive:false}).addTo(map);   // 흰 테두리 점
-const recLine=L.polyline([],{pane:"recPane",color:"#ff1f1f",weight:4.5,opacity:1,dashArray:"11 5 3 5",lineCap:"butt",lineJoin:"round",interactive:false}).addTo(map);   // 빨강 점선: 실시간 이동 기록 전용
+const recCase=L.polyline([],{color:"#fff",weight:8,opacity:.95,dashArray:"11 5 3 5",lineCap:"butt",lineJoin:"round",interactive:false}).addTo(map);   // 흰 테두리 점
+const recLine=L.polyline([],{color:"#ff1f1f",weight:4.5,opacity:1,dashArray:"11 5 3 5",lineCap:"butt",lineJoin:"round",interactive:false}).addTo(map);   // 빨강 점선: 실시간 이동 기록 전용
 const meAcc=L.circle([0,0],{radius:0,color:"#f97316",weight:1,fillOpacity:.12,interactive:false});
 const me=L.marker([0,0],{interactive:false,zIndexOffset:1000,
   icon:L.divIcon({className:"me",html:'<div class="mewrap"><svg viewBox="0 0 32 32" width="28" height="28"><path d="M16 3 27 28 16 22 5 28z" fill="#f97316" stroke="#fff" stroke-width="2.5" stroke-linejoin="round"/></svg></div>',iconSize:[28,28],iconAnchor:[14,14]})});
 
 function recSegs(){ const s=[]; let cur=null; for(const p of rec){ if(!cur||p[4]){cur=[];s.push(cur)} cur.push(p); } return s; }
 function calcRecKm(){ recKm=0; for(const s of recSegs()) for(let i=1;i<s.length;i++) recKm+=hav(s[i-1],s[i]); }
+function bringRecFront(){ try{ recCase.bringToFront(); recLine.bringToFront(); }catch(e){} }   // 내 이동 기록은 항상 GPX 경로 위에 그림
 function drawRec(){
   const segs=[]; for(const [d,ss] of groupDays()) if(mode==="nav"||!recHidden.has(d)) segs.push(...ss);   // 트래커는 기록 탭 체크와 별개로 전부 표시
-  const ll=segs.map(s=>s.map(p=>[p[0],p[1]])); recCase.setLatLngs(ll); recLine.setLatLngs(ll);
+  const ll=segs.map(s=>s.map(p=>[p[0],p[1]])); recCase.setLatLngs(ll); recLine.setLatLngs(ll); bringRecFront();
 }
 function saveRec(){
   const byDay=new Map();
@@ -451,7 +452,8 @@ function addRec(c,t){
 }
 function setMeArrow(){                       // 내 화살표: 진행방향(없으면 흐리게 위쪽) — 지도가 회전 중이면 화면 기준으로 보정
   const w=me.getElement()&&me.getElement().firstChild; if(!w) return;
-  w.style.opacity=hdg==null?".55":"1"; w.style.transform=`rotate(${(hdg||0)+map.getBearing()}deg)`;
+  const fixedUp=headUp&&mode==="nav"&&follow&&hdg!=null;   // 지도 회전 모드: 화살표는 화면 위쪽 고정, 지도만 돈다
+  w.style.opacity=hdg==null?".55":"1"; w.style.transform=fixedUp?"rotate(0deg)":`rotate(${(hdg||0)+map.getBearing()}deg)`;
 }
 function placeMe(c){                        // 내 위치 점 + 정확도 원 + 방향
   const ll=[c.latitude,c.longitude];
@@ -496,7 +498,7 @@ function updateHeading(c,ll){
 }
 let tgtB=null, navTimer=null;
 function recenter(ll){                       // 구글맵 네비처럼: 내 위치를 화면 아래쪽에 두고 진행방향 앞쪽이 더 보이게
-  const z=map.getZoom(), off=map.getSize().y*0.08, a=((360-map.getBearing())%360)*Math.PI/180;
+  const z=map.getZoom(), off=0, a=((360-map.getBearing())%360)*Math.PI/180;
   const p=map.project(ll,z); map.setView(map.unproject(p.add([Math.sin(a)*off,-Math.cos(a)*off]),z),z,{animate:false});
 }
 function navStep(){                          // 0.1초마다 목표 방향으로 부드럽게 회전(최대 8°/틱)
@@ -544,23 +546,22 @@ function onErr(e){
 const NATIVE=!!(window.Capacitor&&Capacitor.isNativePlatform&&Capacitor.isNativePlatform());   // 앱(APK)으로 실행 중이면 화면이 꺼져도 위치를 받는 플러그인 사용
 let bgId=null, bgPlugin=null;
 if(NATIVE&&PAGE==="view"){ let first=false; try{ if(!sessionStorage.getItem("gpx.launched")){ sessionStorage.setItem("gpx.launched","1"); first=true; } }catch(e){} if(first){ location.replace("tracker.html"); } }   // 앱을 켜면 바로 Tracking(자동 기록) 화면으로 시작
+function bgBegin(){                          // 네이티브 위치 감시 시작 — 알림 문구는 기록 여부에 맞춤
+  if(!bgPlugin) bgPlugin=(Capacitor.registerPlugin?Capacitor.registerPlugin("BackgroundGeolocation"):Capacitor.Plugins.BackgroundGeolocation);
+  Promise.resolve(bgPlugin.addWatcher({backgroundTitle:"GPX Tracker",backgroundMessage:recording?"경로 기록 중":"위치 추적 중 (기록 안 함)",requestPermissions:true,stale:false,distanceFilter:5},(l,err)=>{
+    if(err){ if(err.code==="NOT_AUTHORIZED"){ toast("위치 권한이 필요합니다. 설정에서 '항상 허용'으로 바꿔 주세요.",8000); try{bgPlugin.openSettings()}catch(e){} } return; }
+    onPos({coords:{latitude:l.latitude,longitude:l.longitude,accuracy:l.accuracy,speed:l.speed,heading:l.bearing},timestamp:l.time||Date.now()});
+  })).then(id=>{ bgId=id; });
+}
+function bgEnd(){ if(bgPlugin&&bgId!=null){ try{bgPlugin.removeWatcher({id:bgId})}catch(e){} bgId=null; } }
 function startWatch(){
-  if(NATIVE){
-    if(bgId==null&&!bgPlugin){
-      bgPlugin=(Capacitor.registerPlugin?Capacitor.registerPlugin("BackgroundGeolocation"):Capacitor.Plugins.BackgroundGeolocation);
-      Promise.resolve(bgPlugin.addWatcher({backgroundTitle:"GPX Tracker",backgroundMessage:"위치 기록 중",requestPermissions:true,stale:false,distanceFilter:5},(l,err)=>{
-        if(err){ if(err.code==="NOT_AUTHORIZED"){ toast("위치 권한이 필요합니다. 설정에서 '항상 허용'으로 바꿔 주세요.",8000); try{bgPlugin.openSettings()}catch(e){} } return; }
-        onPos({coords:{latitude:l.latitude,longitude:l.longitude,accuracy:l.accuracy,speed:l.speed,heading:l.bearing},timestamp:l.time||Date.now()});
-      })).then(id=>{ bgId=id; });
-    }
-    reqWake(); return true;
-  }
+  if(NATIVE){ if(bgId==null) bgBegin(); reqWake(); return true; }
   if(!navigator.geolocation){ toast("이 브라우저는 위치 기능을 지원하지 않습니다."); return false; }
   if(watchId==null) watchId=navigator.geolocation.watchPosition(onPos,onErr,{enableHighAccuracy:true,maximumAge:1000,timeout:20000});
   reqWake(); return true;
 }
 function stopWatch(){
-  if(NATIVE&&bgPlugin&&bgId!=null){ bgPlugin.removeWatcher({id:bgId}); bgId=null; bgPlugin=null; }
+  if(NATIVE) bgEnd();
   if(watchId!=null){ navigator.geolocation.clearWatch(watchId); watchId=null; }
   if(wake){ try{wake.release()}catch(e){} wake=null; }
   map.removeLayer(me); map.removeLayer(meAcc); lastFix=null;
@@ -649,6 +650,7 @@ $("#recdays").addEventListener("click",e=>{
 $("#seg").addEventListener("click",e=>{ const b=e.target.closest("[data-go]"); if(b&&!b.classList.contains("on")){ saveRec(); location.href=b.dataset.go; } });   // 탭 = 별도 페이지 이동
 $("#btnRec").onclick=()=>{
   recording=!recording;
+  if(NATIVE&&bgPlugin){ bgEnd(); bgBegin(); }          // 알림 문구를 '경로 기록 중'/'위치 추적 중'으로 갱신
   if(!recording) saveRec();
   else { follow=true; if(lastFix&&map.hasLayer(me)){ map.setView(me.getLatLng(),Math.max(map.getZoom(),16),{animate:false}); applyHeading(); } }   // 시작하면 내 위치 버튼처럼 화살표를 정중앙에 두고 확대
   toast(recording?"기록 시작 — 지나온 길을 빨간 선으로 남깁니다":"기록 종료 — 저장되었습니다",3000);
@@ -668,7 +670,7 @@ map.on("dragstart",()=>{ if(follow&&mode!=="view"){ follow=false; refreshUi(); }
 calcRecKm(); drawRec(); refreshUi(); renderRecDays();
 if(PAGE==="nav") setMode("nav");               // 트래커 페이지는 열자마자 내 위치 추적 시작
 
-const APP_V="v0.37"; $("#ver").textContent=APP_V;
+const APP_V="v0.39"; $("#ver").textContent=APP_V;
 if("serviceWorker" in navigator && /^https?:$/.test(location.protocol)){
   const had=!!navigator.serviceWorker.controller;
   navigator.serviceWorker.register("sw.js").then(r=>r.update()).catch(()=>{});

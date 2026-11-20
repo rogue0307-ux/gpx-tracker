@@ -94,7 +94,7 @@ body.live #btnNorth{display:flex}
 #btnNorth svg{transition:transform .15s linear}
 .locate.on{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
 .me{background:none;border:0}
-.mewrap{position:relative;width:46px;height:46px;filter:drop-shadow(0 1px 3px rgba(0,0,0,.6))}
+.mewrap{position:relative;width:28px;height:28px;filter:drop-shadow(0 1px 3px rgba(0,0,0,.6))}
 @media (max-width:760px){
   .app{display:block;position:relative}
   .mapwrap{position:absolute;inset:0}
