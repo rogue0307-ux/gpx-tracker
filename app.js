@@ -690,7 +690,7 @@ map.on("dragstart",()=>{ if(follow&&mode!=="view"){ follow=false; refreshUi(); }
 calcRecKm(); drawRec(); refreshUi(); renderRecDays();
 if(PAGE==="nav") setMode("nav");               // 트래커 페이지는 열자마자 내 위치 추적 시작
 
-const APP_V="v0.50"; $("#ver").textContent=APP_V;
+const APP_V="v0.51"; $("#ver").textContent=APP_V;
 if("serviceWorker" in navigator && /^https?:$/.test(location.protocol)){
   const had=!!navigator.serviceWorker.controller;
   navigator.serviceWorker.register("sw.js").then(r=>r.update()).catch(()=>{});
@@ -828,10 +828,11 @@ if($("#btnOff")&&$("#btnOff").tagName==="BUTTON"){ $("#btnOff").onclick=offDownl
       else{
         const rel=h==null?g.brg:g.brg-h, dl=((rel-shown+540)%360)-180; shown=shown+dl;     // 화면 위=직진, 오른쪽=우회전 쪽
         $("#goArrow").parentElement.style.transform=`rotate(${shown}deg)`;
-        $("#dimDir").textContent=(g.d<40?"경로 위":`경로 이탈 ${Math.round(g.d)}m`)+(h==null?" · 방향 미확정":"");
+        $("#dimDir").textContent="";                                                       // 화살표·속도·날씨만
       }
     }else $("#dimDir").textContent=h==null?"방향 --":`${NAMES[Math.round(h/22.5)%16]} ${Math.round(h)}°`;
     $("#dimSpd").innerHTML=ver>=2?`${sp}<small>km/h</small>`:"";
+    $("#dimWx").textContent=ver===3&&$("#wx")&&!$("#wx").hidden?$("#wx").textContent:"";
     $("#dimRec").textContent=recording?"● REC":"";
   }
   function hint(){ const el=$("#dimHint"); el.textContent=`보기: ${VNAME[ver-1]} · 탭: ${VNAME[ver%3]}(으)로 · 길게 누르기: 종료`; el.classList.add("show"); clearTimeout(hintT); hintT=setTimeout(()=>el.classList.remove("show"),3500); }

@@ -133,3 +133,4 @@ body.live #btnNorth{display:flex}
 #dim svg[hidden]{display:none}
 #dimGo{width:min(66vw,44vh);height:auto}
 #dimDir{text-align:center;line-height:1.35}
+#dimWx{font-size:20px;opacity:.75;text-align:center;max-width:92vw;line-height:1.35;min-height:1px}
