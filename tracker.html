@@ -19,12 +19,12 @@
   <aside id="sheet">
     <div class="grab" id="grab" role="button" aria-label="패널 올리기/내리기"><i></i></div>
     <div class="sheetbody">
-    <div class="head"><h1>Tracking <small id="ver" style="font-weight:400;color:var(--muted)"></small></h1><button id="upd" title="최신 버전으로 업데이트 (저장된 주행기록은 유지됨)">↻ 업데이트</button></div>
+    <div class="head"><h1>Tracking <small id="ver" style="font-weight:400;color:var(--muted)"></small></h1></div>
     <div class="sec">
       <div class="sh">계획 경로 (GPX)</div>
       <div class="drop" id="drop"><b>＋ GPX 파일 불러오기</b> (여러 개 선택 가능 · 이 페이지에만 저장됨)<br><small id="fileinfo">로드된 파일 없음</small></div>
       <div id="filelist"></div>
-      <input type="file" id="file" accept=".gpx,application/gpx+xml,text/xml" multiple hidden>
+      <input type="file" id="file" accept="*/*" multiple hidden>
     </div>
     <div class="sec">
       <div class="sh">오프라인 지도</div>
