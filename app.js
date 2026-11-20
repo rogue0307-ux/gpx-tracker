@@ -546,18 +546,23 @@ function onErr(e){
 const NATIVE=!!(window.Capacitor&&Capacitor.isNativePlatform&&Capacitor.isNativePlatform());   // 앱(APK)으로 실행 중이면 화면이 꺼져도 위치를 받는 플러그인 사용
 let bgId=null, bgPlugin=null;
 if(NATIVE&&PAGE==="view"){ let first=false; try{ if(!sessionStorage.getItem("gpx.launched")){ sessionStorage.setItem("gpx.launched","1"); first=true; } }catch(e){} if(first){ location.replace("tracker.html"); } }   // 앱을 켜면 바로 Tracking(자동 기록) 화면으로 시작
-function bgBegin(){                          // 네이티브 위치 감시 시작 — 알림 문구는 기록 여부에 맞춤
+function bgBegin(){                          // 네이티브 백그라운드 위치(포그라운드 서비스+알림) — 기록 중일 때만 사용
   if(!bgPlugin) bgPlugin=(Capacitor.registerPlugin?Capacitor.registerPlugin("BackgroundGeolocation"):Capacitor.Plugins.BackgroundGeolocation);
-  Promise.resolve(bgPlugin.addWatcher({backgroundTitle:"GPX Tracker",backgroundMessage:recording?"경로 기록 중":"위치 추적 중 (기록 안 함)",requestPermissions:true,stale:false,distanceFilter:5},(l,err)=>{
+  Promise.resolve(bgPlugin.addWatcher({backgroundTitle:"GPX Tracker",backgroundMessage:"경로 기록 중",requestPermissions:true,stale:false,distanceFilter:5},(l,err)=>{
     if(err){ if(err.code==="NOT_AUTHORIZED"){ toast("위치 권한이 필요합니다. 설정에서 '항상 허용'으로 바꿔 주세요.",8000); try{bgPlugin.openSettings()}catch(e){} } return; }
     onPos({coords:{latitude:l.latitude,longitude:l.longitude,accuracy:l.accuracy,speed:l.speed,heading:l.bearing},timestamp:l.time||Date.now()});
   })).then(id=>{ bgId=id; });
 }
 function bgEnd(){ if(bgPlugin&&bgId!=null){ try{bgPlugin.removeWatcher({id:bgId})}catch(e){} bgId=null; } }
+function webWatchStart(){ if(navigator.geolocation&&watchId==null) watchId=navigator.geolocation.watchPosition(onPos,onErr,{enableHighAccuracy:true,maximumAge:1000,timeout:20000}); }
+function webWatchStop(){ if(watchId!=null){ navigator.geolocation.clearWatch(watchId); watchId=null; } }
+function swapWatch(){                        // 앱: 기록 중이면 백그라운드 서비스(알림 있음), 아니면 화면 위치만(알림 없음)
+  if(!NATIVE) return;
+  if(recording){ webWatchStop(); if(bgId==null) bgBegin(); } else { bgEnd(); webWatchStart(); }
+}
 function startWatch(){
-  if(NATIVE){ if(bgId==null) bgBegin(); reqWake(); return true; }
-  if(!navigator.geolocation){ toast("이 브라우저는 위치 기능을 지원하지 않습니다."); return false; }
-  if(watchId==null) watchId=navigator.geolocation.watchPosition(onPos,onErr,{enableHighAccuracy:true,maximumAge:1000,timeout:20000});
+  if(!navigator.geolocation&&!NATIVE){ toast("이 브라우저는 위치 기능을 지원하지 않습니다."); return false; }
+  if(NATIVE) swapWatch(); else webWatchStart();
   reqWake(); return true;
 }
 function stopWatch(){
@@ -650,7 +655,7 @@ $("#recdays").addEventListener("click",e=>{
 $("#seg").addEventListener("click",e=>{ const b=e.target.closest("[data-go]"); if(b&&!b.classList.contains("on")){ saveRec(); location.href=b.dataset.go; } });   // 탭 = 별도 페이지 이동
 $("#btnRec").onclick=()=>{
   recording=!recording;
-  if(NATIVE&&bgPlugin){ bgEnd(); bgBegin(); }          // 알림 문구를 '경로 기록 중'/'위치 추적 중'으로 갱신
+  swapWatch();                                         // 앱: 기록 시작=백그라운드 서비스(알림) 켜기, 종료=끄기
   if(!recording) saveRec();
   else { follow=true; if(lastFix&&map.hasLayer(me)){ map.setView(me.getLatLng(),Math.max(map.getZoom(),16),{animate:false}); applyHeading(); } }   // 시작하면 내 위치 버튼처럼 화살표를 정중앙에 두고 확대
   toast(recording?"기록 시작 — 지나온 길을 빨간 선으로 남깁니다":"기록 종료 — 저장되었습니다",3000);
@@ -670,7 +675,7 @@ map.on("dragstart",()=>{ if(follow&&mode!=="view"){ follow=false; refreshUi(); }
 calcRecKm(); drawRec(); refreshUi(); renderRecDays();
 if(PAGE==="nav") setMode("nav");               // 트래커 페이지는 열자마자 내 위치 추적 시작
 
-const APP_V="v0.41"; $("#ver").textContent=APP_V;
+const APP_V="v0.42"; $("#ver").textContent=APP_V;
 if("serviceWorker" in navigator && /^https?:$/.test(location.protocol)){
   const had=!!navigator.serviceWorker.controller;
   navigator.serviceWorker.register("sw.js").then(r=>r.update()).catch(()=>{});
