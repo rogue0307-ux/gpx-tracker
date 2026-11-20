@@ -259,6 +259,11 @@ function renderList(){
   const shown=tracks.filter(t=>matchFilter(t));
   if(!tracks.length){ box.innerHTML='<div class="empty">GPX 파일을 불러오면 일자별 트랙이 여기에 표시됩니다.</div>'; return; }
   if(!shown.length){ box.innerHTML='<div class="empty">조건에 맞는 트랙이 없습니다.</div>'; return; }
+  if(PAGE==="nav"){                           // Tracking: 월 묶음 없이 트랙(하루)별로 체크박스 + 이름 + 거리
+    let f=""; for(const t of tracks){
+      f+=`<div class="item ${t.id===selId?"sel":""}" data-id="${t.id}"><input type="checkbox" ${t.hidden?"":"checked"} data-c="${t.id}" style="margin-top:3px"><span class="sw" style="background:${t.color}"></span><div class="t"><div class="d">${esc(t.name||"(이름 없음)")}</div><div class="n">${t.km.toFixed(1)}km</div></div></div>`; }
+    const sc0=box.scrollTop; box.innerHTML=f; box.scrollTop=sc0; return;
+  }
   const by=new Map();
   for(const t of shown){ if(!by.has(t.month)) by.set(t.month,[]); by.get(t.month).push(t); }
   let h="";
@@ -708,7 +713,7 @@ calcRecKm(); drawRec(); refreshUi(); renderRecDays();
 if(PAGE==="nav") setMode("nav");               // 트래커 페이지는 열자마자 내 위치 추적 시작
 
 if(PAGE==="view") setTimeout(()=>{ try{ if(!tracks.length&&!rec.length) toast("아직 주행기록·경로가 없습니다. 우측 하단 옵션 → '주행기록 · 경로 · 설정'에서 GPX를 불러오세요.",7000); }catch(e){} },1800);
-const APP_V="v0.62"; $("#ver").textContent=APP_V;
+const APP_V="v0.63"; $("#ver").textContent=APP_V;
 if("serviceWorker" in navigator && /^https?:$/.test(location.protocol)){
   const had=!!navigator.serviceWorker.controller;
   navigator.serviceWorker.register("sw.js").then(r=>r.update()).catch(()=>{});
@@ -808,7 +813,7 @@ if($("#btnOff")&&$("#btnOff").tagName==="BUTTON"){ $("#btnOff").onclick=offDownl
   /* --- 경로 안내(보기 3): GPX 좌표 순서를 따라 진행 위치를 기억하고, 앞쪽 목표점 방향을 화살표로 --- */
   let route=null, rIdx=-1, shown=0, saveT=0;
   function buildRoute(){
-    const vis=tracks.filter(t=>t.visible!==false), sig=vis.map(t=>t.id+":"+t.pts).join(",");
+    const vis=tracks, sig=vis.map(t=>t.id+":"+t.pts).join(",");   // 경로 안내는 표시 켜기/끄기와 무관하게 전체 경로를 사용
     if(route&&route.sig===sig) return route;
     const pts=[], ends=[]; for(const t of vis){ for(const sg of t.segs) for(const p of sg) pts.push([p[0],p[1]]); ends.push(pts.length-1); }   // ends: 트랙(=하루)별 마지막 점 번호
     const cum=[0]; for(let i=1;i<pts.length;i++) cum.push(cum[i-1]+hav(pts[i-1],pts[i]));
