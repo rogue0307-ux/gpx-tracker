@@ -641,7 +641,7 @@ map.on("dragstart",()=>{ if(follow&&mode!=="view"){ follow=false; refreshUi(); }
 calcRecKm(); drawRec(); refreshUi(); renderRecDays();
 if(PAGE==="nav") setMode("nav");               // 트래커 페이지는 열자마자 내 위치 추적 시작
 
-const APP_V="v0.33"; $("#ver").textContent=APP_V;
+const APP_V="v0.34"; $("#ver").textContent=APP_V;
 if("serviceWorker" in navigator && /^https?:$/.test(location.protocol)){
   const had=!!navigator.serviceWorker.controller;
   navigator.serviceWorker.register("sw.js").then(r=>r.update()).catch(()=>{});
@@ -702,20 +702,23 @@ Wi-Fi 권장. 계속할까요?`)) return;
 /* ---------- 상단 날씨 한 줄 (Open-Meteo, 모델 3개 비교 · 오프라인이면 마지막 값) ---------- */
 let wxPos=null; try{ wxPos=JSON.parse(localStorage.getItem("gpx.wxpos")||"null"); }catch(e){}
 function wxText(d){
-  const cur=d.current, h=d.hourly, ks=Object.keys(h).filter(k=>k.startsWith("precipitation_"));
-  const i0=h.time.findIndex(t=>t.slice(0,13)>=cur.time.slice(0,13)); if(i0<0||!ks.length) return "";
-  const n=i=>ks.filter(k=>(h[k][i]||0)>=0.3).length, mm=i=>Math.max(...ks.map(k=>h[k][i]||0));
-  const hr=i=>+h.time[i].slice(11,13);
-  let msg="12시간 내 비 소식 없음";
-  if((cur.precipitation||0)>=0.2||n(i0)>=2){ let e=i0; while(e+1<i0+12&&n(e+1)>=1) e++; msg=`지금 비 · ${hr(e)+1}시까지 이어질 수 있음`; }
-  else for(let i=i0;i<Math.min(h.time.length,i0+12);i++){ if(n(i)>=1){ msg=`${hr(i)}시부터 ${n(i)>=2?"비 예상":"비 가능성(일부 모델)"} · 최대 ${mm(i).toFixed(1)}mm/h`; break; } }
-  return `현재 ${Math.round(cur.temperature_2m)}° · ${msg}`;
+  const cur=d.current, h=d.hourly, key=p=>Object.keys(h).filter(k=>k.startsWith(p+"_"));
+  const pr=key("precipitation"), wg=key("wind_gusts_10m"), wc=key("weather_code");
+  const i0=h.time.findIndex(t=>t.slice(0,13)>=cur.time.slice(0,13)); if(i0<0||!pr.length) return "";
+  const end=Math.min(h.time.length,i0+12), hr=i=>+h.time[i].slice(11,13), rng=f=>{ for(let i=i0;i<end;i++){ const r=f(i); if(r) return [i,r]; } return null; };
+  const nR=i=>pr.filter(k=>(h[k][i]||0)>=0.3).length, mm=i=>Math.max(...pr.map(k=>h[k][i]||0)), gust=i=>Math.max(0,...wg.map(k=>h[k][i]||0));
+  const issues=[];
+  const storm=rng(i=>wc.some(k=>h[k][i]>=95)); if(storm) issues.push(`${hr(storm[0])}시 뇌우 가능성`);
+  if((cur.precipitation||0)>=0.2||nR(i0)>=2){ let e=i0; while(e+1<end&&nR(e+1)>=1) e++; issues.push(`지금 비 · ${hr(e)+1}시까지 이어질 수 있음`); }
+  else { const r=rng(i=>nR(i)>=1&&nR(i)); if(r) issues.push(`${hr(r[0])}시부터 ${r[1]>=2?"비 예상":"비 가능성(일부 모델)"} · 최대 ${mm(r[0]).toFixed(1)}mm/h`); }
+  const w=rng(i=>gust(i)>=50&&gust(i)); if(w){ const g=Math.round(w[1]); issues.push(`${hr(w[0])}시 ${g>=90?"태풍급 강풍":g>=65?"강풍":"바람 강함"}(돌풍 ${g}km/h)`); }
+  return `현재 ${Math.round(cur.temperature_2m)}° · 습도 ${Math.round(cur.relative_humidity_2m)}%`+(issues.length?" · "+issues.join(" · "):"");
 }
 async function wxRefresh(){
   const el=$("#wx"); if(!el||el.tagName==="INPUT") return;
   const c=wxPos||(()=>{ const m=map.getCenter(); return [m.lat,m.lng]; })();
   try{
-    const r=await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${c[0].toFixed(3)}&longitude=${c[1].toFixed(3)}&current=temperature_2m,precipitation&hourly=precipitation&models=ecmwf_ifs025,gfs_seamless,icon_seamless&forecast_days=2&timezone=auto`);
+    const r=await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${c[0].toFixed(3)}&longitude=${c[1].toFixed(3)}&current=temperature_2m,relative_humidity_2m,precipitation&hourly=precipitation,wind_gusts_10m,weather_code&models=ecmwf_ifs025,gfs_seamless,icon_seamless&forecast_days=2&timezone=auto`);
     const t=wxText(await r.json()); if(!t) throw 0;
     el.textContent=t; el.hidden=false; try{ localStorage.setItem("gpx.wx",JSON.stringify({t,at:Date.now()})); }catch(e){}
   }catch(e){
