@@ -402,8 +402,8 @@ try{
   if(old){ const a=JSON.parse(old); if(Array.isArray(a)&&a.length){ rec.push(...a); rec.sort((x,y)=>x[2]-y[2]); rec.forEach(q=>dirty.add(dayOf(q[2]))); } localStorage.removeItem("gpxv.rec"); }
 }catch(e){}
 map.createPane("recPane").style.zIndex=450;                 // 내 이동 기록은 GPX 경로(400) 위 최상단 층 — 경로를 잘 따라가는지 한눈에 확인
-const recCase=L.polyline([],{pane:"recPane",color:"#fff",weight:8,opacity:.95,dashArray:"1 11",lineCap:"round",lineJoin:"round",interactive:false}).addTo(map);   // 흰 테두리 점
-const recLine=L.polyline([],{pane:"recPane",color:"#ff1f1f",weight:4.5,opacity:1,dashArray:"1 11",lineCap:"round",lineJoin:"round",interactive:false}).addTo(map);   // 빨강 점선: 실시간 이동 기록 전용
+const recCase=L.polyline([],{pane:"recPane",color:"#fff",weight:8,opacity:.95,dashArray:"11 5 3 5",lineCap:"butt",lineJoin:"round",interactive:false}).addTo(map);   // 흰 테두리 점
+const recLine=L.polyline([],{pane:"recPane",color:"#ff1f1f",weight:4.5,opacity:1,dashArray:"11 5 3 5",lineCap:"butt",lineJoin:"round",interactive:false}).addTo(map);   // 빨강 점선: 실시간 이동 기록 전용
 const meAcc=L.circle([0,0],{radius:0,color:"#f97316",weight:1,fillOpacity:.12,interactive:false});
 const me=L.marker([0,0],{interactive:false,zIndexOffset:1000,
   icon:L.divIcon({className:"me",html:'<div class="mewrap"><svg viewBox="0 0 32 32" width="28" height="28"><path d="M16 3 27 28 16 22 5 28z" fill="#f97316" stroke="#fff" stroke-width="2.5" stroke-linejoin="round"/></svg></div>',iconSize:[28,28],iconAnchor:[14,14]})});
@@ -668,7 +668,7 @@ map.on("dragstart",()=>{ if(follow&&mode!=="view"){ follow=false; refreshUi(); }
 calcRecKm(); drawRec(); refreshUi(); renderRecDays();
 if(PAGE==="nav") setMode("nav");               // 트래커 페이지는 열자마자 내 위치 추적 시작
 
-const APP_V="v0.36"; $("#ver").textContent=APP_V;
+const APP_V="v0.37"; $("#ver").textContent=APP_V;
 if("serviceWorker" in navigator && /^https?:$/.test(location.protocol)){
   const had=!!navigator.serviceWorker.controller;
   navigator.serviceWorker.register("sw.js").then(r=>r.update()).catch(()=>{});
