@@ -611,7 +611,7 @@ map.on("dragstart",()=>{ if(follow&&mode!=="view"){ follow=false; refreshUi(); }
 calcRecKm(); drawRec(); refreshUi(); renderRecDays();
 if(PAGE==="nav") setMode("nav");               // 트래커 페이지는 열자마자 내 위치 추적 시작
 
-const APP_V="v0.22"; $("#ver").textContent=APP_V;
+const APP_V="v0.23"; $("#ver").textContent=APP_V;
 if("serviceWorker" in navigator && /^https?:$/.test(location.protocol)){
   const had=!!navigator.serviceWorker.controller;
   navigator.serviceWorker.register("sw.js").then(r=>r.update()).catch(()=>{});
@@ -619,7 +619,7 @@ if("serviceWorker" in navigator && /^https?:$/.test(location.protocol)){
 }
 $("#upd").onclick=async()=>{                  // 캐시만 비우고 다시 받기 (localStorage의 주행기록은 그대로)
   toast("업데이트 중…",5000);
-  try{ for(const r of await navigator.serviceWorker.getRegistrations()) await r.unregister(); for(const k of await caches.keys()) await caches.delete(k); }catch(e){}
+  try{ for(const r of await navigator.serviceWorker.getRegistrations()) await r.unregister(); for(const k of await caches.keys()) if(k!=="gpx-tiles") await caches.delete(k); }catch(e){}
   saveRec(); location.reload();
 };
 
@@ -634,4 +634,40 @@ dbAll().then(a=>{ if(a.length) loadTexts(a.map(x=>({name:x.name,text:x.text})),f
   for(const u of cand){ try{ const r=await fetch(u); if(r.ok) items.push({name:u.split("/").pop(),text:await r.text()}); }catch(e){} }
   if(items.length) loadTexts(items);
 })();
+/* ---------- 오프라인 지도 (경로 주변 타일을 폰에 저장) ---------- */
+const OFF_PLAN=[[7,25],[8,25],[9,25],[10,20],[11,15],[12,8],[13,4],[14,2.5],[15,1.2]];   // [줌, 경로에서 반경 km]
+function tileUrls(tpl){
+  const set=new Map();
+  const pts=[]; for(const t of tracks) for(const sg of t.segs){ let last=null; for(const p of sg){ if(!last||hav(last,p)>0.4){ pts.push(p); last=p; } } }
+  for(const [z,r] of OFF_PLAN){ const n=2**z;
+    for(const p of pts){ const x=(p[1]+180)/360*n, s=Math.sin(p[0]*Math.PI/180), y=(0.5-Math.log((1+s)/(1-s))/(4*Math.PI))*n;
+      const k=Math.ceil(r/(40075*Math.cos(p[0]*Math.PI/180)/n)), fx=Math.floor(x), fy=Math.floor(y);
+      for(let a=Math.max(0,fx-k);a<=Math.min(n-1,fx+k);a++) for(let b=Math.max(0,fy-k);b<=Math.min(n-1,fy+k);b++) set.set(z+"/"+a+"/"+b,[z,a,b]); } }
+  return [...set.values()].map(([z,x,y])=>tpl.replace("{z}",z).replace("{x}",x).replace("{y}",y));
+}
+async function offStatus(){
+  try{ const c=await caches.open("gpx-tiles"); const n=(await c.keys()).length; $("#offinfo").textContent=n?`저장된 지도 ${n.toLocaleString()}장 (인터넷 없이도 표시)`:"저장된 지도 없음"; return n; }catch(e){ $("#offinfo").textContent="이 브라우저는 오프라인 지도 저장을 지원하지 않음"; return 0; }
+}
+let offBusy=false;
+async function offDownload(){
+  if(offBusy) return;
+  if(!tracks.length){ toast("먼저 위에서 GPX 파일을 불러오세요."); return; }
+  if(!navigator.onLine){ toast("인터넷 연결 상태에서 받아야 합니다."); return; }
+  const k=baseSel.value, tpls=BASES[k].slice(0,1).concat(BASES[k][2]?[BASES[k][2]]:[]);
+  let urls=[]; for(const t of tpls) urls=urls.concat(tileUrls(t));
+  if(!confirm(`경로 주변 지도 ${urls.length.toLocaleString()}장(약 ${Math.round(urls.length*25/1024)}MB)을 저장합니다.
+선택된 지도: ${k}
+Wi-Fi 권장. 계속할까요?`)) return;
+  offBusy=true; const btn=$("#btnOff"); btn.disabled=true;
+  const c=await caches.open("gpx-tiles"); let done=0, fail=0, idx=0;
+  async function worker(){
+    while(idx<urls.length){ const u=urls[idx++];
+      try{ if(!(await c.match(u))){ let r; try{ r=await fetch(u); }catch(e){ r=await fetch(u,{mode:"no-cors"}); } if(r.ok||r.type==="opaque") await c.put(u,r); else fail++; } }catch(e){ fail++; }
+      done++; if(done%25===0||done===urls.length) $("#offinfo").textContent=`받는 중 ${done.toLocaleString()} / ${urls.length.toLocaleString()}${fail?` (실패 ${fail})`:""}`;
+    } }
+  await Promise.all(Array.from({length:6},worker));
+  offBusy=false; btn.disabled=false; await offStatus();
+  toast(fail?`완료 (실패 ${fail}장 — 다시 누르면 빠진 것만 받음)`:"오프라인 지도 저장 완료",6000);
+}
+if($("#btnOff")&&$("#btnOff").tagName==="BUTTON"){ $("#btnOff").onclick=offDownload; offStatus(); }
 })();
