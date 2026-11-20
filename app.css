@@ -149,3 +149,11 @@ body.live #btnNorth{display:flex}
 .menu .seg{display:block;width:100%;background:transparent;border:0;box-shadow:none;border-radius:0}
 .menu .seg button{flex:none;display:block;width:100%;padding:14px;text-align:left;font-size:15px;background:transparent}
 .menu .seg button svg{margin-right:8px}
+.menu button{display:flex;align-items:center;gap:12px}
+.mi{width:20px;height:20px;flex:none;margin:0}
+.menu .seg svg{width:20px;height:20px;margin:0}
+.ic-stop{display:none}
+.menu .acts button.recording .ic-rec{display:none}
+.menu .acts button.recording .ic-stop{display:block}
+.menu .seg button{font-weight:400}
+.menu .acts button,.menu #btnSettings{font-weight:400}

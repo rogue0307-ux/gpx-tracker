@@ -28,7 +28,7 @@
       <input type="file" id="file" accept="*/*" multiple hidden>
     </div>
     <details class="sec" id="settings">
-      <summary>⚙ 지도·표시 설정</summary>
+      <summary>지도 · 표시 설정</summary>
       <div class="row"><label>지도</label><select id="base"></select></div>
       <div class="row"><label>색상</label><select id="colorBy"><option value="date">날짜 그라데이션</option><option value="month">월별</option><option value="one">단색</option></select></div>
       <div class="row"><label><input type="checkbox" id="link"> 구간 사이 점선 연결</label></div>
@@ -44,8 +44,12 @@
   </aside>
   <div class="mapwrap"><div id="map"></div><div class="wx" id="wx" hidden></div><div class="toast" id="toast"></div>
     <button class="locate" id="btnLocate" title="내 위치로 이동" aria-label="내 위치로 이동"><svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="6.5"/><circle cx="12" cy="12" r="1.8" fill="currentColor"/><path d="M12 1.5v4M12 18.5v4M1.5 12h4M18.5 12h4"/></svg></button>
-    <div class="nav">
-      <div class="seg" id="seg"><button data-m="view" data-go="index.html" class="on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v4h4"/><path d="M12 7.5V12l3 2"/></svg>History</button><button data-m="nav" data-go="tracker.html" class="rec"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 5 20l7-4 7 4z"/></svg>Tracking</button></div>
+    <div class="nav nav2">
+      <button class="fab" id="btnOpt" type="button" aria-label="옵션"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/><circle cx="9" cy="7" r="2" fill="currentColor"/><circle cx="15" cy="12" r="2" fill="currentColor"/><circle cx="9" cy="17" r="2" fill="currentColor"/></svg></button>
+      <div class="menu" id="menu" hidden>
+        <button id="btnSettings" type="button"><svg class="mi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h16"/><circle cx="9" cy="7" r="2" fill="currentColor"/><circle cx="15" cy="12" r="2" fill="currentColor"/><circle cx="9" cy="17" r="2" fill="currentColor"/></svg><span>주행기록 · 경로 · 설정</span></button>
+        <div class="seg" id="seg"><button data-m="nav" data-go="tracker.html" type="button"><svg class="mi" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 5 20l7-4 7 4z"/></svg><span>Tracking</span></button></div>
+      </div>
     </div>
   </div>
 </div>

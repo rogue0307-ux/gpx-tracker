@@ -8,8 +8,8 @@ const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",
 /* ---------- 화면 높이 실측 + 바텀시트(모바일) ---------- */
 const mq=matchMedia("(max-width:760px)");
 const root=document.documentElement;
-let appH=innerHeight, sheetIdx=PAGE==="nav"?0:1, sheetH=0;
-const snaps=()=>[PAGE==="nav"?0:64,Math.round(appH*.6)];   // 접힘(Tracking은 완전히 숨김) / 펼침
+let appH=innerHeight, sheetIdx=0, sheetH=0;
+const snaps=()=>[0,Math.round(appH*.6)];   // 닫힘(완전히 숨김) / 열림 — 두 화면 모두 지도가 기본, 패널은 옵션 메뉴에서
 function applySheet(h){ sheetH=h==null?snaps()[sheetIdx]:h; root.style.setProperty("--sheet-h",sheetH+"px"); const sh=document.getElementById("sheet"); if(sh) sh.style.visibility=sheetH<=0?"hidden":""; }
 function setAppH(){
   appH=Math.round((window.visualViewport&&visualViewport.height)||innerHeight);
@@ -31,7 +31,7 @@ if(window.visualViewport) visualViewport.addEventListener("resize",setAppH);
   const opt=$("#btnOpt"), menu=$("#menu"); if(!opt||opt.tagName==="INPUT"||!menu||menu.tagName==="INPUT") return;
   opt.addEventListener("click",e=>{ e.stopPropagation(); menu.hidden=!menu.hidden; });
   menu.addEventListener("click",()=>{ setTimeout(()=>{ menu.hidden=true; },0); });
-  document.addEventListener("click",e=>{ if(!menu.hidden&&!menu.contains(e.target)) menu.hidden=true; });
+  document.addEventListener("click",e=>{ if(!menu.hidden&&!e.composedPath().includes(menu)&&!e.composedPath().includes(opt)) menu.hidden=true; });
 })();
 const fit=(b,o={})=>map.fitBounds(b,{...o,paddingBottomRight:[0,mq.matches?sheetH:0]});   // 시트에 가려지지 않게 여백
 
@@ -576,7 +576,7 @@ function onErr(e){
 }
 const NATIVE=!!(window.Capacitor&&Capacitor.isNativePlatform&&Capacitor.isNativePlatform());   // 앱(APK)으로 실행 중이면 화면이 꺼져도 위치를 받는 플러그인 사용
 let bgId=null, bgPlugin=null;
-if(NATIVE&&PAGE==="view"){ let first=false; try{ if(!sessionStorage.getItem("gpx.launched")){ sessionStorage.setItem("gpx.launched","1"); first=true; } }catch(e){} if(first){ location.replace("tracker.html"); } }   // 앱을 켜면 바로 Tracking(자동 기록) 화면으로 시작
+if(NATIVE&&PAGE==="view"){ let viaMenu=false; try{ viaMenu=!!sessionStorage.getItem("gpx.nav"); sessionStorage.removeItem("gpx.nav"); }catch(e){} if(!viaMenu) location.replace("tracker.html"); }   // 앱을 새로 켜면 항상 Tracking으로 시작(옵션 메뉴로 History에 간 경우만 머무름)
 function bgBegin(){                          // 네이티브 백그라운드 위치(포그라운드 서비스+알림) — 기록 중일 때만 사용
   if(!bgPlugin) bgPlugin=(Capacitor.registerPlugin?Capacitor.registerPlugin("BackgroundGeolocation"):Capacitor.Plugins.BackgroundGeolocation);
   Promise.resolve(bgPlugin.addWatcher({backgroundTitle:"GPX Tracker",backgroundMessage:"경로 기록 중",requestPermissions:true,stale:false,distanceFilter:0},(l,err)=>{
@@ -625,9 +625,10 @@ function refreshUi(){
   if(live){
     const a=lastFix?`정확도 ${Math.round(lastFix.acc)}m · ${Math.round(effSpd()*3.6)}km/h`:"위치 찾는 중…";
     const idle=rec.length&&lastFix?Math.floor((Date.now()-rec[rec.length-1][2])/60000):0;
-    hud.textContent=(recording?"● 기록 중 · ":"")+(headUp?(hdg==null?"방향 대기 · ":`방향 ${Math.round(hdg)}°${hdgSrc?"("+hdgSrc+")":""} · `):"")+a+(rec.length?` · 기록 ${recKm.toFixed(1)}km`:"")+(recording&&idle>=1?` · 정차 ${idle>=60?Math.floor(idle/60)+"시간 "+idle%60:idle}분`:"");
+    const ht=(recording?"● 기록 중 · ":"")+(headUp?(hdg==null?"방향 대기 · ":`방향 ${Math.round(hdg)}°${hdgSrc?"("+hdgSrc+")":""} · `):"")+a+(rec.length?` · 기록 ${recKm.toFixed(1)}km`:"")+(recording&&idle>=1?` · 정차 ${idle>=60?Math.floor(idle/60)+"시간 "+idle%60:idle}분`:"");
+    if(hud.textContent!==ht) hud.textContent=ht;
   }
-  const br=$("#btnRec"); br.textContent=recording?"■ 기록 종료":"● 기록 시작"; br.classList.toggle("recording",recording); $("#btnOpt").classList.toggle("rec",recording);
+  const br=$("#btnRec"), rl=$("#recLbl"), lbl=recording?"기록 종료":"기록 시작"; if(rl.textContent!==lbl) rl.textContent=lbl; br.classList.toggle("recording",recording); $("#btnOpt").classList.toggle("rec",recording);
   acts.classList.toggle("show",live);
   $("#btnLocate").classList.toggle("on",live&&follow);
 }
@@ -670,7 +671,7 @@ function renderRecDays(){
   const allOn=days.every(([d])=>!recHidden.has(d));
   box.innerHTML=`<div class="rdh"><input type="checkbox" id="rcall" ${allOn?"checked":""} title="전체 선택/해제"><span>내 주행기록 ${days.length}일</span><span style="margin-left:auto;font-weight:400">폰에 자동 저장</span></div><div class="rdl">`+days.map(([d,segs])=>{
     const st=dayStats(segs);
-    return `<div class="rd" data-d="${d}"><input type="checkbox" data-rc="${d}" ${recHidden.has(d)?"":"checked"}><span class="sw" style="background:#ff1f1f"></span><div class="t"><div class="d">${d.slice(5)} <span style="font-weight:400;color:var(--muted)">${st.km.toFixed(1)}km</span></div><div class="n">${hm(st.f)}~${hm(st.l)}${st.stop?` · 정차 ${st.stop}분`:""}</div></div><button data-x="${d}" title="GPX로 내려받기">⬇</button><button data-del="${d}" title="삭제">삭제</button></div>`;
+    return `<div class="rd" data-d="${d}"><input type="checkbox" data-rc="${d}" ${recHidden.has(d)?"":"checked"}><span class="sw" style="background:#ff1f1f"></span><div class="t"><div class="d">${d.slice(5)} <span style="font-weight:400;color:var(--muted)">${st.km.toFixed(1)}km</span></div><div class="n">${hm(st.f)}~${hm(st.l)}${st.stop?` · 정차 ${st.stop}분`:""}</div></div><button data-x="${d}" title="GPX로 내려받기">GPX 저장</button><button data-del="${d}" title="삭제">삭제</button></div>`;
   }).join("")+"</div>";
 }
 $("#recdays").addEventListener("click",e=>{
@@ -683,7 +684,7 @@ $("#recdays").addEventListener("click",e=>{
   if(recHidden.has(r.dataset.d)){ recHidden.delete(r.dataset.d); saveHidden(); drawRec(); renderRecDays(); }
   fit(L.latLngBounds(segs.flat().map(q=>[q[0],q[1]])).pad(.15),{maxZoom:16});
 });
-$("#seg").addEventListener("click",e=>{ const b=e.target.closest("[data-go]"); if(b&&!b.classList.contains("on")){ saveRec(); location.href=b.dataset.go; } });   // 탭 = 별도 페이지 이동
+$("#seg").addEventListener("click",e=>{ const b=e.target.closest("[data-go]"); if(b&&!b.classList.contains("on")){ saveRec(); try{ sessionStorage.setItem("gpx.nav","1"); }catch(x){} location.href=b.dataset.go; } });   // 탭 = 별도 페이지 이동
 $("#btnRec").onclick=()=>{
   recording=!recording;
   swapWatch();                                         // 앱: 기록 시작=백그라운드 서비스(알림) 켜기, 종료=끄기
@@ -694,7 +695,7 @@ $("#btnRec").onclick=()=>{
 };
 function deleteDay(day){
   const segs=groupDays().get(day); if(!segs) return;
-  if(!confirm(`${day} 주행기록(${dayStats(segs).km.toFixed(1)}km)을 삭제합니다. 되돌릴 수 없습니다.\n필요하면 먼저 ⬇로 GPX를 내려받으세요.\n\n삭제할까요?`)) return;
+  if(!confirm(`${day} 주행기록(${dayStats(segs).km.toFixed(1)}km)을 삭제합니다. 되돌릴 수 없습니다.\n필요하면 먼저 'GPX 저장'으로 내려받으세요.\n\n삭제할까요?`)) return;
   try{ localStorage.removeItem(DAY_KEY+day); }catch(e){}
   rec=rec.filter(q=>dayOf(q[2])!==day); dirty.delete(day); recHidden.delete(day); saveHidden();
   if(rec[0]) rec[0][4]=1;
@@ -706,7 +707,8 @@ map.on("dragstart",()=>{ if(follow&&mode!=="view"){ follow=false; refreshUi(); }
 calcRecKm(); drawRec(); refreshUi(); renderRecDays();
 if(PAGE==="nav") setMode("nav");               // 트래커 페이지는 열자마자 내 위치 추적 시작
 
-const APP_V="v0.58"; $("#ver").textContent=APP_V;
+if(PAGE==="view") setTimeout(()=>{ try{ if(!tracks.length&&!rec.length) toast("아직 주행기록·경로가 없습니다. 우측 하단 옵션 → '주행기록 · 경로 · 설정'에서 GPX를 불러오세요.",7000); }catch(e){} },1800);
+const APP_V="v0.62"; $("#ver").textContent=APP_V;
 if("serviceWorker" in navigator && /^https?:$/.test(location.protocol)){
   const had=!!navigator.serviceWorker.controller;
   navigator.serviceWorker.register("sw.js").then(r=>r.update()).catch(()=>{});
