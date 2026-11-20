@@ -455,9 +455,14 @@ function setMeArrow(){                       // 내 화살표: 진행방향(없�
   const fixedUp=headUp&&mode==="nav"&&follow&&hdg!=null;   // 지도 회전 모드: 화살표는 화면 위쪽 고정, 지도만 돈다
   w.style.opacity=hdg==null?".55":"1"; w.style.transform=fixedUp?"rotate(0deg)":`rotate(${(hdg||0)+map.getBearing()}deg)`;
 }
+function effSpd(){                          // 현재 속도(m/s): 새 위치값이 한동안 없으면(정차) 0 — 마지막 속도가 남아 있지 않게
+  if(!lastFix||lastFix.spd==null||isNaN(lastFix.spd)) return 0;
+  const age=(Date.now()-lastFix.at)/1000, lim=Math.min(12,Math.max(4,7.5/Math.max(lastFix.spd,0.5)+1.5));
+  return age>lim?0:lastFix.spd;
+}
 function placeMe(c){                        // 내 위치 점 + 정확도 원 + 방향
   const ll=[c.latitude,c.longitude];
-  lastFix={acc:c.accuracy,spd:c.speed};
+  lastFix={acc:c.accuracy,spd:c.speed,at:Date.now()};
   if(!map.hasLayer(me)){ meAcc.addTo(map); me.addTo(map); }
   me.setLatLng(ll); meAcc.setLatLng(ll).setRadius(c.accuracy||0);
   setMeArrow();
@@ -480,7 +485,7 @@ function onOrient(e){
   const h=cmpHeading(e.alpha,e.beta,e.gamma);
   cmp=cmp==null?h:nrm(cmp+adiff(h,cmp)*0.25);                  // 떨림 완화(원형 평균)
   const now=Date.now(); if(now-orientT<100) return; orientT=now;
-  if(mode==="nav"&&spd<3&&useCompass()){ applyHeading(); setMeArrow(); }
+  spd=effSpd(); if(mode==="nav"&&spd<3&&useCompass()){ applyHeading(); setMeArrow(); }
 }
 addEventListener("deviceorientationabsolute",onOrient,true);
 addEventListener("deviceorientation",onOrient,true);
@@ -558,7 +563,7 @@ let bgId=null, bgPlugin=null;
 if(NATIVE&&PAGE==="view"){ let first=false; try{ if(!sessionStorage.getItem("gpx.launched")){ sessionStorage.setItem("gpx.launched","1"); first=true; } }catch(e){} if(first){ location.replace("tracker.html"); } }   // 앱을 켜면 바로 Tracking(자동 기록) 화면으로 시작
 function bgBegin(){                          // 네이티브 백그라운드 위치(포그라운드 서비스+알림) — 기록 중일 때만 사용
   if(!bgPlugin) bgPlugin=(Capacitor.registerPlugin?Capacitor.registerPlugin("BackgroundGeolocation"):Capacitor.Plugins.BackgroundGeolocation);
-  Promise.resolve(bgPlugin.addWatcher({backgroundTitle:"GPX Tracker",backgroundMessage:"경로 기록 중",requestPermissions:true,stale:false,distanceFilter:5},(l,err)=>{
+  Promise.resolve(bgPlugin.addWatcher({backgroundTitle:"GPX Tracker",backgroundMessage:"경로 기록 중",requestPermissions:true,stale:false,distanceFilter:0},(l,err)=>{
     if(err){ if(err.code==="NOT_AUTHORIZED"){ toast("위치 권한이 필요합니다. 설정에서 '항상 허용'으로 바꿔 주세요.",8000); try{bgPlugin.openSettings()}catch(e){} } return; }
     onPos({coords:{latitude:l.latitude,longitude:l.longitude,accuracy:l.accuracy,speed:l.speed,heading:l.bearing},timestamp:l.time||Date.now()});
   })).then(id=>{ bgId=id; });
@@ -602,7 +607,7 @@ function refreshUi(){
   const live=mode!=="view";
   hud.classList.toggle("show",live);
   if(live){
-    const a=lastFix?`정확도 ${Math.round(lastFix.acc)}m · ${lastFix.spd!=null?Math.round(lastFix.spd*3.6):0}km/h`:"위치 찾는 중…";
+    const a=lastFix?`정확도 ${Math.round(lastFix.acc)}m · ${Math.round(effSpd()*3.6)}km/h`:"위치 찾는 중…";
     const idle=rec.length&&lastFix?Math.floor((Date.now()-rec[rec.length-1][2])/60000):0;
     hud.textContent=(recording?"● 기록 중 · ":"")+(headUp?(hdg==null?"방향 대기 · ":`방향 ${Math.round(hdg)}°${hdgSrc?"("+hdgSrc+")":""} · `):"")+a+(rec.length?` · 기록 ${recKm.toFixed(1)}km`:"")+(recording&&idle>=1?` · 정차 ${idle>=60?Math.floor(idle/60)+"시간 "+idle%60:idle}분`:"");
   }
@@ -680,12 +685,12 @@ function deleteDay(day){
   calcRecKm(); drawRec(); renderRecDays(); refreshUi(); toast(`${day} 기록을 삭제했습니다.`);
 }
 $("#btnLocate").onclick=locateMe;
-setInterval(()=>{ if(mode!=="view") refreshUi(); },15000);   // 정차 시간 갱신
+setInterval(()=>{ if(mode!=="view") refreshUi(); },2000);   // 정차 시간·속도 갱신
 map.on("dragstart",()=>{ if(follow&&mode!=="view"){ follow=false; refreshUi(); } });
 calcRecKm(); drawRec(); refreshUi(); renderRecDays();
 if(PAGE==="nav") setMode("nav");               // 트래커 페이지는 열자마자 내 위치 추적 시작
 
-const APP_V="v0.43"; $("#ver").textContent=APP_V;
+const APP_V="v0.44"; $("#ver").textContent=APP_V;
 if("serviceWorker" in navigator && /^https?:$/.test(location.protocol)){
   const had=!!navigator.serviceWorker.controller;
   navigator.serviceWorker.register("sw.js").then(r=>r.update()).catch(()=>{});
@@ -785,7 +790,7 @@ if($("#btnOff")&&$("#btnOff").tagName==="BUTTON"){ $("#btnOff").onclick=offDownl
     const h=(typeof hdg==="number")?hdg:null;
     $("#roseRot").style.transform=`rotate(${h==null?0:-h}deg)`;                       // 진행방향이 항상 위, 북쪽 표시가 돈다
     $("#dimDir").textContent=h==null?"방향 --":`${NAMES[Math.round(h/22.5)%16]} ${Math.round(h)}°`;
-    const sp=lastFix&&lastFix.spd!=null?Math.round(lastFix.spd*3.6):0;
+    const sp=Math.round(effSpd()*3.6);
     $("#dimSpd").innerHTML=ver===2?`${sp}<small>km/h</small>`:"";
     $("#dimRec").textContent=recording?"● REC":"";
   }
