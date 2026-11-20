@@ -116,3 +116,7 @@ body.live #btnNorth{display:flex}
   .toast{max-width:calc(100% - 24px);top:10px}
 }
 .arr{background:none;border:0}
+
+.wx{position:absolute;left:58px;right:76px;top:12px;z-index:1000;background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:7px 10px;font-size:13px;text-align:center;box-shadow:0 4px 18px rgba(0,0,0,.25);pointer-events:none}
+.wx[hidden]{display:none}
+.toast{top:60px!important}

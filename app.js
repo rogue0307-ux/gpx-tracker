@@ -401,11 +401,11 @@ try{
   const old=localStorage.getItem("gpxv.rec");   // 이전 단일 키 → 일자별로 이전
   if(old){ const a=JSON.parse(old); if(Array.isArray(a)&&a.length){ rec.push(...a); rec.sort((x,y)=>x[2]-y[2]); rec.forEach(q=>dirty.add(dayOf(q[2]))); } localStorage.removeItem("gpxv.rec"); }
 }catch(e){}
-const recCase=L.polyline([],{color:"#fff",weight:10,opacity:.9,lineJoin:"round",interactive:false}).addTo(map);   // 흰 테두리: 빨강은 실시간 이동 기록 전용
-const recLine=L.polyline([],{color:"#ff1f1f",weight:6,opacity:1,lineJoin:"round"}).addTo(map);
+const recCase=L.polyline([],{color:"#fff",weight:6,opacity:.9,lineJoin:"round",interactive:false}).addTo(map);   // 흰 테두리: 빨강은 실시간 이동 기록 전용
+const recLine=L.polyline([],{color:"#ff1f1f",weight:3.5,opacity:1,lineJoin:"round"}).addTo(map);
 const meAcc=L.circle([0,0],{radius:0,color:"#f97316",weight:1,fillOpacity:.12,interactive:false});
 const me=L.marker([0,0],{interactive:false,zIndexOffset:1000,
-  icon:L.divIcon({className:"me",html:'<div class="mewrap"><svg viewBox="0 0 32 32" width="46" height="46"><path d="M16 3 27 28 16 22 5 28z" fill="#f97316" stroke="#fff" stroke-width="2.5" stroke-linejoin="round"/></svg></div>',iconSize:[46,46],iconAnchor:[23,23]})});
+  icon:L.divIcon({className:"me",html:'<div class="mewrap"><svg viewBox="0 0 32 32" width="28" height="28"><path d="M16 3 27 28 16 22 5 28z" fill="#f97316" stroke="#fff" stroke-width="2.5" stroke-linejoin="round"/></svg></div>',iconSize:[28,28],iconAnchor:[14,14]})});
 
 function recSegs(){ const s=[]; let cur=null; for(const p of rec){ if(!cur||p[4]){cur=[];s.push(cur)} cur.push(p); } return s; }
 function calcRecKm(){ recKm=0; for(const s of recSegs()) for(let i=1;i<s.length;i++) recKm+=hav(s[i-1],s[i]); }
@@ -438,6 +438,7 @@ function addRec(c,t){
   if(last){
     const d=hav(last,ll), dt=(t-last[2])/1000;
     if(d<0.01) return;                       // 10m 미만 이동은 기록 안 함
+    if((c.speed||0)<2&&d<Math.min(c.accuracy||0,30)*1.2/1000) return;   // 정차·저속 중 GPS 흔들림(정확도 범위 안의 움직임)은 기록 안 함
     // 정차는 점을 안 찍고 시각 차이로 남긴다(도착 점 → 출발 점). 멀리 떨어진 채 5분 넘게 끊겼을 때만 새 구간
     if(dt>300&&d>0.1) start=1;
     else if(dt<=300&&d*1000/Math.max(dt,1)>70) return;// 250km/h 초과 = 튀는 점
@@ -492,7 +493,7 @@ $("#btnNorth").onclick=()=>{
 map.on("rotate",()=>{ setMeArrow(); $("#northIcon").style.transform=`rotate(${map.getBearing()}deg)`; });
 refreshNorth();
 function onPos(pos){
-  const c=pos.coords; updateHeading(c,[c.latitude,c.longitude]); applyHeading(); const ll=placeMe(c);
+  const c=pos.coords; updateHeading(c,[c.latitude,c.longitude]); applyHeading(); const ll=placeMe(c); wxPosUpdate(ll);
   if(follow){ if(map.getZoom()<15) map.setView(ll,16,{animate:false}); else map.panTo(ll,{animate:false}); if(headUp&&mode==="nav") recenter(ll); }
   if(recording) addRec(c,pos.timestamp);     // "기록 시작" 중일 때만 지나온 길 기록
   refreshUi();
@@ -640,7 +641,7 @@ map.on("dragstart",()=>{ if(follow&&mode!=="view"){ follow=false; refreshUi(); }
 calcRecKm(); drawRec(); refreshUi(); renderRecDays();
 if(PAGE==="nav") setMode("nav");               // 트래커 페이지는 열자마자 내 위치 추적 시작
 
-const APP_V="v0.31"; $("#ver").textContent=APP_V;
+const APP_V="v0.33"; $("#ver").textContent=APP_V;
 if("serviceWorker" in navigator && /^https?:$/.test(location.protocol)){
   const had=!!navigator.serviceWorker.controller;
   navigator.serviceWorker.register("sw.js").then(r=>r.update()).catch(()=>{});
@@ -698,5 +699,32 @@ Wi-Fi 권장. 계속할까요?`)) return;
   offBusy=false; btn.disabled=false; await offStatus();
   toast(fail?`완료 (실패 ${fail}장 — 다시 누르면 빠진 것만 받음)`:"오프라인 지도 저장 완료",6000);
 }
+/* ---------- 상단 날씨 한 줄 (Open-Meteo, 모델 3개 비교 · 오프라인이면 마지막 값) ---------- */
+let wxPos=null; try{ wxPos=JSON.parse(localStorage.getItem("gpx.wxpos")||"null"); }catch(e){}
+function wxText(d){
+  const cur=d.current, h=d.hourly, ks=Object.keys(h).filter(k=>k.startsWith("precipitation_"));
+  const i0=h.time.findIndex(t=>t.slice(0,13)>=cur.time.slice(0,13)); if(i0<0||!ks.length) return "";
+  const n=i=>ks.filter(k=>(h[k][i]||0)>=0.3).length, mm=i=>Math.max(...ks.map(k=>h[k][i]||0));
+  const hr=i=>+h.time[i].slice(11,13);
+  let msg="12시간 내 비 소식 없음";
+  if((cur.precipitation||0)>=0.2||n(i0)>=2){ let e=i0; while(e+1<i0+12&&n(e+1)>=1) e++; msg=`지금 비 · ${hr(e)+1}시까지 이어질 수 있음`; }
+  else for(let i=i0;i<Math.min(h.time.length,i0+12);i++){ if(n(i)>=1){ msg=`${hr(i)}시부터 ${n(i)>=2?"비 예상":"비 가능성(일부 모델)"} · 최대 ${mm(i).toFixed(1)}mm/h`; break; } }
+  return `현재 ${Math.round(cur.temperature_2m)}° · ${msg}`;
+}
+async function wxRefresh(){
+  const el=$("#wx"); if(!el||el.tagName==="INPUT") return;
+  const c=wxPos||(()=>{ const m=map.getCenter(); return [m.lat,m.lng]; })();
+  try{
+    const r=await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${c[0].toFixed(3)}&longitude=${c[1].toFixed(3)}&current=temperature_2m,precipitation&hourly=precipitation&models=ecmwf_ifs025,gfs_seamless,icon_seamless&forecast_days=2&timezone=auto`);
+    const t=wxText(await r.json()); if(!t) throw 0;
+    el.textContent=t; el.hidden=false; try{ localStorage.setItem("gpx.wx",JSON.stringify({t,at:Date.now()})); }catch(e){}
+  }catch(e){
+    let o=null; try{ o=JSON.parse(localStorage.getItem("gpx.wx")||"null"); }catch(x){}
+    if(o){ const d=new Date(o.at); el.textContent=`${o.t} (${d.getHours()}:${String(d.getMinutes()).padStart(2,"0")} 기준)`; el.hidden=false; }
+  }
+}
+function wxPosUpdate(ll){ if(!wxPos||hav(wxPos,ll)>15){ wxPos=ll; try{ localStorage.setItem("gpx.wxpos",JSON.stringify(ll)); }catch(e){} wxRefresh(); } }   // 15km 이상 이동하면 그 위치 날씨로 갱신
+setTimeout(wxRefresh,1200); setInterval(wxRefresh,15*60e3);
+
 if($("#btnOff")&&$("#btnOff").tagName==="BUTTON"){ $("#btnOff").onclick=offDownload; offStatus(); }
 })();
