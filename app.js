@@ -401,8 +401,9 @@ try{
   const old=localStorage.getItem("gpxv.rec");   // 이전 단일 키 → 일자별로 이전
   if(old){ const a=JSON.parse(old); if(Array.isArray(a)&&a.length){ rec.push(...a); rec.sort((x,y)=>x[2]-y[2]); rec.forEach(q=>dirty.add(dayOf(q[2]))); } localStorage.removeItem("gpxv.rec"); }
 }catch(e){}
-const recCase=L.polyline([],{color:"#fff",weight:6,opacity:.9,lineJoin:"round",interactive:false}).addTo(map);   // 흰 테두리: 빨강은 실시간 이동 기록 전용
-const recLine=L.polyline([],{color:"#ff1f1f",weight:3.5,opacity:1,lineJoin:"round"}).addTo(map);
+map.createPane("recPane").style.zIndex=450;                 // 내 이동 기록은 GPX 경로(400) 위 최상단 층 — 경로를 잘 따라가는지 한눈에 확인
+const recCase=L.polyline([],{pane:"recPane",color:"#fff",weight:8,opacity:.95,dashArray:"1 11",lineCap:"round",lineJoin:"round",interactive:false}).addTo(map);   // 흰 테두리 점
+const recLine=L.polyline([],{pane:"recPane",color:"#ff1f1f",weight:4.5,opacity:1,dashArray:"1 11",lineCap:"round",lineJoin:"round",interactive:false}).addTo(map);   // 빨강 점선: 실시간 이동 기록 전용
 const meAcc=L.circle([0,0],{radius:0,color:"#f97316",weight:1,fillOpacity:.12,interactive:false});
 const me=L.marker([0,0],{interactive:false,zIndexOffset:1000,
   icon:L.divIcon({className:"me",html:'<div class="mewrap"><svg viewBox="0 0 32 32" width="28" height="28"><path d="M16 3 27 28 16 22 5 28z" fill="#f97316" stroke="#fff" stroke-width="2.5" stroke-linejoin="round"/></svg></div>',iconSize:[28,28],iconAnchor:[14,14]})});
@@ -411,7 +412,7 @@ function recSegs(){ const s=[]; let cur=null; for(const p of rec){ if(!cur||p[4]
 function calcRecKm(){ recKm=0; for(const s of recSegs()) for(let i=1;i<s.length;i++) recKm+=hav(s[i-1],s[i]); }
 function drawRec(){
   const segs=[]; for(const [d,ss] of groupDays()) if(mode==="nav"||!recHidden.has(d)) segs.push(...ss);   // 트래커는 기록 탭 체크와 별개로 전부 표시
-  const ll=segs.map(s=>s.map(p=>[p[0],p[1]])); recCase.setLatLngs(ll); recLine.setLatLngs(ll); recCase.bringToFront(); recLine.bringToFront();
+  const ll=segs.map(s=>s.map(p=>[p[0],p[1]])); recCase.setLatLngs(ll); recLine.setLatLngs(ll);
 }
 function saveRec(){
   const byDay=new Map();
@@ -462,10 +463,36 @@ function placeMe(c){                        // 내 위치 점 + 정확도 원 + 
 }
 let headUp=false; try{ headUp=localStorage.getItem("gpxv.headup")==="1"; }catch(e){}
 let hdg=null, hdgAnchor=null;                // 현재 진행방향(도) / 방향 계산 기준점
-function updateHeading(c,ll){                // GPS 방향값(≥3.6km/h) 우선, 없으면 직전 기준점에서 8m 넘게 움직였을 때 두 점의 방위
-  if(c.heading!=null&&!isNaN(c.heading)&&(c.speed||0)>=1){ hdg=c.heading; hdgAnchor=ll; return; }
+/* 방향 = 달릴 땐 GPS 방향, 정차·저속엔 폰 나침반(+ GPS와의 차이를 학습한 보정값) */
+let cmp=null, cmpOff=0, cmpN=0, spd=0, hdgSrc="";
+const nrm=a=>((a%360)+360)%360, adiff=(a,b)=>((a-b+540)%360)-180;
+function cmpHeading(al,be,ga){               // 센서 각도 → 폰이 향한 방위(세워 들면 뒷면, 눕히면 윗변)
+  const r=Math.PI/180,cA=Math.cos(al*r),sA=Math.sin(al*r),cB=Math.cos(be*r),sB=Math.sin(be*r),cG=Math.cos(ga*r),sG=Math.sin(ga*r);
+  const m12=-cB*sA, m13=cA*sG+cG*sA*sB, m22=cA*cB, m23=sA*sG-cA*cG*sB, bx=-m13, by=-m23, back=Math.hypot(bx,by)>0.6;
+  return nrm(Math.atan2(back?bx:m12,back?by:m22)*180/Math.PI);
+}
+function useCompass(){ if(cmp==null) return false; hdg=nrm(cmp+cmpOff); hdgSrc="센서"; return true; }
+let orientT=0;
+function onOrient(e){
+  if(e.alpha==null||e.beta==null||e.gamma==null||e.absolute===false) return;
+  const h=cmpHeading(e.alpha,e.beta,e.gamma);
+  cmp=cmp==null?h:nrm(cmp+adiff(h,cmp)*0.25);                  // 떨림 완화(원형 평균)
+  const now=Date.now(); if(now-orientT<100) return; orientT=now;
+  if(mode==="nav"&&spd<3&&useCompass()){ applyHeading(); setMeArrow(); }
+}
+addEventListener("deviceorientationabsolute",onOrient,true);
+addEventListener("deviceorientation",onOrient,true);
+function updateHeading(c,ll){
+  spd=c.speed||0;
+  if(c.heading!=null&&!isNaN(c.heading)&&spd>=3){                // 시속 11km 이상: GPS 방향 사용 + 나침반 차이 학습
+    hdg=c.heading; hdgAnchor=ll; hdgSrc="GPS";
+    if(cmp!=null){ cmpOff=cmpN?nrm(cmpOff+adiff(adiff(c.heading,cmp),cmpOff)*0.15):adiff(c.heading,cmp); cmpOff=nrm(cmpOff); cmpN++; }
+    return;
+  }
+  if(useCompass()) return;                                       // 저속·정차: 보정된 나침반
+  if(c.heading!=null&&!isNaN(c.heading)&&spd>=1){ hdg=c.heading; hdgAnchor=ll; hdgSrc="GPS"; return; }
   if(!hdgAnchor){ hdgAnchor=ll; return; }
-  if(hav(hdgAnchor,ll)>=0.008){ hdg=bearing(hdgAnchor,ll); hdgAnchor=ll; }
+  if(hav(hdgAnchor,ll)>=0.008){ hdg=bearing(hdgAnchor,ll); hdgAnchor=ll; hdgSrc="GPS"; }
 }
 let tgtB=null, navTimer=null;
 function recenter(ll){                       // 구글맵 네비처럼: 내 위치를 화면 아래쪽에 두고 진행방향 앞쪽이 더 보이게
@@ -561,7 +588,7 @@ function refreshUi(){
   if(live){
     const a=lastFix?`정확도 ${Math.round(lastFix.acc)}m · ${lastFix.spd!=null?Math.round(lastFix.spd*3.6):0}km/h`:"위치 찾는 중…";
     const idle=rec.length&&lastFix?Math.floor((Date.now()-rec[rec.length-1][2])/60000):0;
-    hud.textContent=(recording?"● 기록 중 · ":"")+(headUp?(hdg==null?"방향 대기 · ":`방향 ${Math.round(hdg)}° · `):"")+a+(rec.length?` · 기록 ${recKm.toFixed(1)}km`:"")+(recording&&idle>=1?` · 정차 ${idle>=60?Math.floor(idle/60)+"시간 "+idle%60:idle}분`:"");
+    hud.textContent=(recording?"● 기록 중 · ":"")+(headUp?(hdg==null?"방향 대기 · ":`방향 ${Math.round(hdg)}°${hdgSrc?"("+hdgSrc+")":""} · `):"")+a+(rec.length?` · 기록 ${recKm.toFixed(1)}km`:"")+(recording&&idle>=1?` · 정차 ${idle>=60?Math.floor(idle/60)+"시간 "+idle%60:idle}분`:"");
   }
   const br=$("#btnRec"); br.textContent=recording?"■ 기록 종료":"● 기록 시작"; br.classList.toggle("recording",recording);
   acts.classList.toggle("show",live);
@@ -641,7 +668,7 @@ map.on("dragstart",()=>{ if(follow&&mode!=="view"){ follow=false; refreshUi(); }
 calcRecKm(); drawRec(); refreshUi(); renderRecDays();
 if(PAGE==="nav") setMode("nav");               // 트래커 페이지는 열자마자 내 위치 추적 시작
 
-const APP_V="v0.34"; $("#ver").textContent=APP_V;
+const APP_V="v0.36"; $("#ver").textContent=APP_V;
 if("serviceWorker" in navigator && /^https?:$/.test(location.protocol)){
   const had=!!navigator.serviceWorker.controller;
   navigator.serviceWorker.register("sw.js").then(r=>r.update()).catch(()=>{});
