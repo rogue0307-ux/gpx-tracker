@@ -142,9 +142,9 @@ function assignColors(){
   const months=[...new Set(tracks.map(mk))].sort();
   const dark=baseSel.value.includes("어두운")||baseSel.value.includes("위성");
   for(const t of tracks){
-    if(mode==="one") t.color=dark?"#ffd24a":"#e11d48";
-    else if(mode==="month"){ const i=months.indexOf(mk(t)); t.color=`hsl(${(i*47)%360} 75% ${dark?62:42}%)`; }
-    else { const i=dates.indexOf(dk(t)),f=dates.length>1?i/(dates.length-1):0; t.color=`hsl(${Math.round(260-f*260)} 80% ${dark?60:45}%)`; }
+    if(mode==="one") t.color=dark?"#ffd24a":"#7c3aed";
+    else if(mode==="month"){ const i=months.indexOf(mk(t)); t.color=`hsl(${150+(i*47)%140} 75% ${dark?62:42}%)`; }
+    else { const i=dates.indexOf(dk(t)),f=dates.length>1?i/(dates.length-1):0; t.color=`hsl(${Math.round(290-f*140)} 80% ${dark?60:45}%)`; }
   }
 }
 
@@ -277,7 +277,7 @@ function select(id,zoom){
     t.group.eachLayer(l=>l.setStyle({weight:5})); t.group.bringToFront();
     const a=t.segs[0][0],z=t.segs[t.segs.length-1],zz=z[z.length-1];
     L.circleMarker([a[0],a[1]],{radius:7,color:"#fff",weight:2,fillColor:"#16a34a",fillOpacity:1}).bindTooltip("출발").addTo(hl);
-    L.circleMarker([zz[0],zz[1]],{radius:7,color:"#fff",weight:2,fillColor:"#dc2626",fillOpacity:1}).bindTooltip("도착").addTo(hl);
+    L.circleMarker([zz[0],zz[1]],{radius:7,color:"#fff",weight:2,fillColor:"#111827",fillOpacity:1}).bindTooltip("도착").addTo(hl);
     if(zoom) fit(t.group.getBounds().pad(.15),{maxZoom:15});
   }
   renderList();
@@ -401,7 +401,8 @@ try{
   const old=localStorage.getItem("gpxv.rec");   // 이전 단일 키 → 일자별로 이전
   if(old){ const a=JSON.parse(old); if(Array.isArray(a)&&a.length){ rec.push(...a); rec.sort((x,y)=>x[2]-y[2]); rec.forEach(q=>dirty.add(dayOf(q[2]))); } localStorage.removeItem("gpxv.rec"); }
 }catch(e){}
-const recLine=L.polyline([],{color:"#ef4444",weight:5,opacity:.95,lineJoin:"round"}).addTo(map);
+const recCase=L.polyline([],{color:"#fff",weight:10,opacity:.9,lineJoin:"round",interactive:false}).addTo(map);   // 흰 테두리: 빨강은 실시간 이동 기록 전용
+const recLine=L.polyline([],{color:"#ff1f1f",weight:6,opacity:1,lineJoin:"round"}).addTo(map);
 const meAcc=L.circle([0,0],{radius:0,color:"#f97316",weight:1,fillOpacity:.12,interactive:false});
 const me=L.marker([0,0],{interactive:false,zIndexOffset:1000,
   icon:L.divIcon({className:"me",html:'<div class="mewrap"><svg viewBox="0 0 32 32" width="46" height="46"><path d="M16 3 27 28 16 22 5 28z" fill="#f97316" stroke="#fff" stroke-width="2.5" stroke-linejoin="round"/></svg></div>',iconSize:[46,46],iconAnchor:[23,23]})});
@@ -410,7 +411,7 @@ function recSegs(){ const s=[]; let cur=null; for(const p of rec){ if(!cur||p[4]
 function calcRecKm(){ recKm=0; for(const s of recSegs()) for(let i=1;i<s.length;i++) recKm+=hav(s[i-1],s[i]); }
 function drawRec(){
   const segs=[]; for(const [d,ss] of groupDays()) if(mode==="nav"||!recHidden.has(d)) segs.push(...ss);   // 트래커는 기록 탭 체크와 별개로 전부 표시
-  recLine.setLatLngs(segs.map(s=>s.map(p=>[p[0],p[1]]))); recLine.bringToFront();
+  const ll=segs.map(s=>s.map(p=>[p[0],p[1]])); recCase.setLatLngs(ll); recLine.setLatLngs(ll); recCase.bringToFront(); recLine.bringToFront();
 }
 function saveRec(){
   const byDay=new Map();
@@ -604,7 +605,7 @@ function renderRecDays(){
   const allOn=days.every(([d])=>!recHidden.has(d));
   box.innerHTML=`<div class="rdh"><input type="checkbox" id="rcall" ${allOn?"checked":""} title="전체 선택/해제"><span>내 주행기록 ${days.length}일</span><span style="margin-left:auto;font-weight:400">폰에 자동 저장</span></div><div class="rdl">`+days.map(([d,segs])=>{
     const st=dayStats(segs);
-    return `<div class="rd" data-d="${d}"><input type="checkbox" data-rc="${d}" ${recHidden.has(d)?"":"checked"}><span class="sw" style="background:#ef4444"></span><div class="t"><div class="d">${d.slice(5)} <span style="font-weight:400;color:var(--muted)">${st.km.toFixed(1)}km</span></div><div class="n">${hm(st.f)}~${hm(st.l)}${st.stop?` · 정차 ${st.stop}분`:""}</div></div><button data-x="${d}" title="GPX로 내려받기">⬇</button><button data-del="${d}" title="삭제">삭제</button></div>`;
+    return `<div class="rd" data-d="${d}"><input type="checkbox" data-rc="${d}" ${recHidden.has(d)?"":"checked"}><span class="sw" style="background:#ff1f1f"></span><div class="t"><div class="d">${d.slice(5)} <span style="font-weight:400;color:var(--muted)">${st.km.toFixed(1)}km</span></div><div class="n">${hm(st.f)}~${hm(st.l)}${st.stop?` · 정차 ${st.stop}분`:""}</div></div><button data-x="${d}" title="GPX로 내려받기">⬇</button><button data-del="${d}" title="삭제">삭제</button></div>`;
   }).join("")+"</div>";
 }
 $("#recdays").addEventListener("click",e=>{
@@ -639,7 +640,7 @@ map.on("dragstart",()=>{ if(follow&&mode!=="view"){ follow=false; refreshUi(); }
 calcRecKm(); drawRec(); refreshUi(); renderRecDays();
 if(PAGE==="nav") setMode("nav");               // 트래커 페이지는 열자마자 내 위치 추적 시작
 
-const APP_V="v0.30"; $("#ver").textContent=APP_V;
+const APP_V="v0.31"; $("#ver").textContent=APP_V;
 if("serviceWorker" in navigator && /^https?:$/.test(location.protocol)){
   const had=!!navigator.serviceWorker.controller;
   navigator.serviceWorker.register("sw.js").then(r=>r.update()).catch(()=>{});
