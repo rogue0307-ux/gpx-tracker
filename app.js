@@ -690,7 +690,7 @@ map.on("dragstart",()=>{ if(follow&&mode!=="view"){ follow=false; refreshUi(); }
 calcRecKm(); drawRec(); refreshUi(); renderRecDays();
 if(PAGE==="nav") setMode("nav");               // 트래커 페이지는 열자마자 내 위치 추적 시작
 
-const APP_V="v0.44"; $("#ver").textContent=APP_V;
+const APP_V="v0.48"; $("#ver").textContent=APP_V;
 if("serviceWorker" in navigator && /^https?:$/.test(location.protocol)){
   const had=!!navigator.serviceWorker.controller;
   navigator.serviceWorker.register("sw.js").then(r=>r.update()).catch(()=>{});
@@ -786,20 +786,59 @@ if($("#btnOff")&&$("#btnOff").tagName==="BUTTON"){ $("#btnOff").onclick=offDownl
   let ver=1, timer=null, hold=null, hintT=null; try{ ver=+localStorage.getItem("gpx.dimv")||1; }catch(e){}
   const setBright=v=>{ try{ window.AndroidBright&&window.AndroidBright.setBrightness(v); }catch(e){} };
   const NAMES=["북","북북동","북동","동북동","동","동남동","남동","남남동","남","남남서","남서","서남서","서","서북서","북서","북북서"];
+  /* --- 경로 안내(보기 3): GPX 좌표 순서를 따라 진행 위치를 기억하고, 앞쪽 목표점 방향을 화살표로 --- */
+  let route=null, rIdx=-1, shown=0, saveT=0;
+  function buildRoute(){
+    const vis=tracks.filter(t=>t.visible!==false), sig=vis.map(t=>t.id+":"+t.pts).join(",");
+    if(route&&route.sig===sig) return route;
+    const pts=[]; for(const t of vis) for(const sg of t.segs) for(const p of sg) pts.push([p[0],p[1]]);
+    const cum=[0]; for(let i=1;i<pts.length;i++) cum.push(cum[i-1]+hav(pts[i-1],pts[i]));
+    rIdx=-1; try{ const o=JSON.parse(localStorage.getItem("gpx.ridx")||"null"); if(o&&o.sig===sig&&o.i<pts.length&&Date.now()-(o.t||0)<12*3600e3) rIdx=o.i; }catch(e){}     // 앱을 껐다 켜도 진행 위치 복원(12시간 지나면 새 주행으로 보고 버림)
+    return (route={sig,pts,cum});
+  }
+  function nearest(pts,ll,from,to,ref){          // [인덱스, 거리(m)] — ref가 있으면 최단거리+20m 이내 후보 중 ref에 가장 가까운 번호(겹치는 구간에서 진행 위치 우선, ref=0이면 가장 앞 번호)
+    const cl=Math.cos(ll[0]*Math.PI/180), lo=Math.max(0,from), hi=Math.min(pts.length-1,to); let bi=-1,bd=1e18;
+    for(let i=lo;i<=hi;i++){ const dy=pts[i][0]-ll[0], dx=(pts[i][1]-ll[1])*cl, d=dy*dy+dx*dx; if(d<bd){ bd=d; bi=i; } }
+    const m=Math.sqrt(bd)*111320;
+    if(ref!=null&&bi>=0){ const lim=(m+20)/111320; let best=bi, bg=1e9; for(let i=lo;i<=hi;i++){ const dy=pts[i][0]-ll[0], dx=(pts[i][1]-ll[1])*cl; if(Math.sqrt(dy*dy+dx*dx)<=lim){ const g=Math.abs(i-ref); if(g<bg){ bg=g; best=i; } } } bi=best; }
+    return [bi,m];
+  }
+  function guide(){
+    const R=buildRoute(); if(!R.pts.length||!lastFix||!map.hasLayer(me)) return null;
+    const p=me.getLatLng(), ll=[p.lat,p.lng]; let i,d;
+    if(rIdx<0){ [i,d]=nearest(R.pts,ll,0,R.pts.length-1,0); }
+    else{
+      [i,d]=nearest(R.pts,ll,rIdx-60,rIdx+400,null);                                    // 진행 위치 근처(앞쪽 위주)에서만 찾음
+      if(d>400){ const [gi,gd]=nearest(R.pts,ll,0,R.pts.length-1,rIdx); if(gd<150){ i=gi; d=gd; } }   // 경로에서 크게 벗어났다가 다른 곳의 경로 위에 서면 그 위치로 재설정(앞뒤 무관)
+    }
+    if(i!==rIdx||saveT++%20===0){ try{ localStorage.setItem("gpx.ridx",JSON.stringify({sig:R.sig,i,t:Date.now()})); }catch(e){} }
+    rIdx=i;
+    const look=Math.max(0.12,effSpd()*8/1000); let j=i; while(j<R.pts.length-1&&R.cum[j]-R.cum[i]<look) j++;
+    return {d,brg:bearing(ll,R.pts[j]),rem:R.cum[R.cum.length-1]-R.cum[i]};
+  }
+  const VNAME=["방향만","방향+속도","경로 안내"];
   function render(){
-    const h=(typeof hdg==="number")?hdg:null;
+    const h=(typeof hdg==="number")?hdg:null, sp=Math.round(effSpd()*3.6);
+    const g=ver===3?guide():null;
+    $("#dimRose").style.display=ver===3?"none":""; $("#dimGo").style.display=ver===3?"":"none";
     $("#roseRot").style.transform=`rotate(${h==null?0:-h}deg)`;                       // 진행방향이 항상 위, 북쪽 표시가 돈다
-    $("#dimDir").textContent=h==null?"방향 --":`${NAMES[Math.round(h/22.5)%16]} ${Math.round(h)}°`;
-    const sp=Math.round(effSpd()*3.6);
-    $("#dimSpd").innerHTML=ver===2?`${sp}<small>km/h</small>`:"";
+    if(ver===3){
+      if(!g) $("#dimDir").textContent="경로·위치 대기";
+      else{
+        const rel=h==null?g.brg:g.brg-h, dl=((rel-shown+540)%360)-180; shown=shown+dl;     // 화면 위=직진, 오른쪽=우회전 쪽
+        $("#goArrow").parentElement.style.transform=`rotate(${shown}deg)`;
+        $("#dimDir").textContent=(g.d<40?"경로 위":`경로 이탈 ${Math.round(g.d)}m`)+` · 남은 ${g.rem>=10?Math.round(g.rem):g.rem.toFixed(1)}km`+(h==null?" · 방향 미확정":"");
+      }
+    }else $("#dimDir").textContent=h==null?"방향 --":`${NAMES[Math.round(h/22.5)%16]} ${Math.round(h)}°`;
+    $("#dimSpd").innerHTML=ver>=2?`${sp}<small>km/h</small>`:"";
     $("#dimRec").textContent=recording?"● REC":"";
   }
-  function hint(){ const el=$("#dimHint"); el.textContent=`탭: ${ver===1?"속도도 표시":"방향만 표시"} · 길게 누르기: 종료`; el.classList.add("show"); clearTimeout(hintT); hintT=setTimeout(()=>el.classList.remove("show"),3500); }
+  function hint(){ const el=$("#dimHint"); el.textContent=`보기: ${VNAME[ver-1]} · 탭: ${VNAME[ver%3]}(으)로 · 길게 누르기: 종료`; el.classList.add("show"); clearTimeout(hintT); hintT=setTimeout(()=>el.classList.remove("show"),3500); }
   function open_(){ dim.hidden=false; reqWake(); render(); hint(); timer=setInterval(render,250); }
   function close_(){ dim.hidden=true; clearInterval(timer); timer=null; }
   $("#btnDim").onclick=open_;
   dim.addEventListener("pointerdown",()=>{ clearTimeout(hold); hold=setTimeout(()=>{ hold=null; close_(); },700); });
-  dim.addEventListener("pointerup",()=>{ if(hold){ clearTimeout(hold); hold=null; ver=ver===1?2:1; try{localStorage.setItem("gpx.dimv",ver)}catch(e){} render(); hint(); } });
+  dim.addEventListener("pointerup",()=>{ if(hold){ clearTimeout(hold); hold=null; ver=ver%3+1; try{localStorage.setItem("gpx.dimv",ver)}catch(e){} render(); hint(); } });
   dim.addEventListener("pointercancel",()=>{ clearTimeout(hold); hold=null; });
   document.addEventListener("visibilitychange",()=>{ if(!document.hidden&&!dim.hidden) reqWake(); });
 })();
