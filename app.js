@@ -670,7 +670,7 @@ map.on("dragstart",()=>{ if(follow&&mode!=="view"){ follow=false; refreshUi(); }
 calcRecKm(); drawRec(); refreshUi(); renderRecDays();
 if(PAGE==="nav") setMode("nav");               // 트래커 페이지는 열자마자 내 위치 추적 시작
 
-const APP_V="v0.40"; $("#ver").textContent=APP_V;
+const APP_V="v0.41"; $("#ver").textContent=APP_V;
 if("serviceWorker" in navigator && /^https?:$/.test(location.protocol)){
   const had=!!navigator.serviceWorker.controller;
   navigator.serviceWorker.register("sw.js").then(r=>r.update()).catch(()=>{});
@@ -775,8 +775,8 @@ if($("#btnOff")&&$("#btnOff").tagName==="BUTTON"){ $("#btnOff").onclick=offDownl
     $("#dimRec").textContent=recording?"● REC":"";
   }
   function hint(){ const el=$("#dimHint"); el.textContent=`탭: ${ver===1?"속도도 표시":"방향만 표시"} · 길게 누르기: 종료`; el.classList.add("show"); clearTimeout(hintT); hintT=setTimeout(()=>el.classList.remove("show"),3500); }
-  function open_(){ dim.hidden=false; setBright(0.01); reqWake(); render(); hint(); timer=setInterval(render,250); }
-  function close_(){ dim.hidden=true; setBright(-1); clearInterval(timer); timer=null; }
+  function open_(){ dim.hidden=false; reqWake(); render(); hint(); timer=setInterval(render,250); }
+  function close_(){ dim.hidden=true; clearInterval(timer); timer=null; }
   $("#btnDim").onclick=open_;
   dim.addEventListener("pointerdown",()=>{ clearTimeout(hold); hold=setTimeout(()=>{ hold=null; close_(); },700); });
   dim.addEventListener("pointerup",()=>{ if(hold){ clearTimeout(hold); hold=null; ver=ver===1?2:1; try{localStorage.setItem("gpx.dimv",ver)}catch(e){} render(); hint(); } });
