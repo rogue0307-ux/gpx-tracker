@@ -402,9 +402,9 @@ try{
   if(old){ const a=JSON.parse(old); if(Array.isArray(a)&&a.length){ rec.push(...a); rec.sort((x,y)=>x[2]-y[2]); rec.forEach(q=>dirty.add(dayOf(q[2]))); } localStorage.removeItem("gpxv.rec"); }
 }catch(e){}
 const recLine=L.polyline([],{color:"#ef4444",weight:5,opacity:.95,lineJoin:"round"}).addTo(map);
-const meAcc=L.circle([0,0],{radius:0,color:"#2563eb",weight:1,fillOpacity:.12,interactive:false});
+const meAcc=L.circle([0,0],{radius:0,color:"#f97316",weight:1,fillOpacity:.12,interactive:false});
 const me=L.marker([0,0],{interactive:false,zIndexOffset:1000,
-  icon:L.divIcon({className:"me",html:'<div class="mewrap"><div class="mearrow"></div><div class="medot"></div></div>',iconSize:[28,28],iconAnchor:[14,14]})});
+  icon:L.divIcon({className:"me",html:'<div class="mewrap"><svg viewBox="0 0 32 32" width="46" height="46"><path d="M16 3 27 28 16 22 5 28z" fill="#f97316" stroke="#fff" stroke-width="2.5" stroke-linejoin="round"/></svg></div>',iconSize:[46,46],iconAnchor:[23,23]})});
 
 function recSegs(){ const s=[]; let cur=null; for(const p of rec){ if(!cur||p[4]){cur=[];s.push(cur)} cur.push(p); } return s; }
 function calcRecKm(){ recKm=0; for(const s of recSegs()) for(let i=1;i<s.length;i++) recKm+=hav(s[i-1],s[i]); }
@@ -446,13 +446,16 @@ function addRec(c,t){
   drawRec();
   if(rec.length%5===0) saveRec();
 }
+function setMeArrow(){                       // 내 화살표: 진행방향(없으면 흐리게 위쪽) — 지도가 회전 중이면 화면 기준으로 보정
+  const w=me.getElement()&&me.getElement().firstChild; if(!w) return;
+  w.style.opacity=hdg==null?".55":"1"; w.style.transform=`rotate(${(hdg||0)+map.getBearing()}deg)`;
+}
 function placeMe(c){                        // 내 위치 점 + 정확도 원 + 방향
   const ll=[c.latitude,c.longitude];
   lastFix={acc:c.accuracy,spd:c.speed};
   if(!map.hasLayer(me)){ meAcc.addTo(map); me.addTo(map); }
   me.setLatLng(ll); meAcc.setLatLng(ll).setRadius(c.accuracy||0);
-  const w=me.getElement()&&me.getElement().firstChild;
-  if(w){ const ok=c.heading!=null&&!isNaN(c.heading)&&(c.speed||0)>0.8; w.classList.toggle("hd",ok); if(ok) w.style.transform=`rotate(${c.heading+map.getBearing()}deg)`; }   // 지도가 회전 중이면 화면 기준 각도로 보정
+  setMeArrow();
   return ll;
 }
 let headUp=false; try{ headUp=localStorage.getItem("gpxv.headup")==="1"; }catch(e){}
@@ -462,10 +465,20 @@ function updateHeading(c,ll){                // GPS 방향값(≥3.6km/h) 우선
   if(!hdgAnchor){ hdgAnchor=ll; return; }
   if(hav(hdgAnchor,ll)>=0.008){ hdg=bearing(hdgAnchor,ll); hdgAnchor=ll; }
 }
-function applyHeading(){                     // 진행방향 위 모드: 방향이 잡혀 있고 따라가는 중일 때 지도를 회전
+let tgtB=null, navTimer=null;
+function recenter(ll){                       // 구글맵 네비처럼: 내 위치를 화면 아래쪽에 두고 진행방향 앞쪽이 더 보이게
+  const z=map.getZoom(), off=map.getSize().y*0.08, a=((360-map.getBearing())%360)*Math.PI/180;
+  const p=map.project(ll,z); map.setView(map.unproject(p.add([Math.sin(a)*off,-Math.cos(a)*off]),z),z,{animate:false});
+}
+function navStep(){                          // 0.1초마다 목표 방향으로 부드럽게 회전(최대 8°/틱)
+  if(!(headUp&&mode==="nav"&&follow&&tgtB!=null&&map.hasLayer(me))){ clearInterval(navTimer); navTimer=null; return; }
+  const cur=map.getBearing(), diff=((tgtB-cur+540)%360)-180;
+  if(Math.abs(diff)<0.4) return;
+  const st=Math.max(-8,Math.min(8,diff*0.3)); map.setBearing((cur+st+360)%360); recenter(me.getLatLng());
+}
+function applyHeading(){                     // 진행방향 위 모드: 방향이 잡혀 있고 따라가는 중일 때 목표 방향 갱신 → navStep이 부드럽게 따라감
   if(!headUp||mode!=="nav"||!follow||hdg==null) return;
-  const target=(360-hdg)%360, cur=map.getBearing(); let d=Math.abs(target-cur); if(d>180) d=360-d;
-  if(d>=4) map.setBearing(target);
+  tgtB=(360-hdg)%360; if(!navTimer) navTimer=setInterval(navStep,100);
 }
 function refreshNorth(){ $("#btnNorth").classList.toggle("on",headUp); }
 $("#btnNorth").onclick=()=>{
@@ -475,11 +488,11 @@ $("#btnNorth").onclick=()=>{
   refreshNorth(); refreshUi();
   toast(headUp?(hdg==null?"진행방향이 위쪽 — 조금 움직이면 방향이 잡혀 지도가 회전합니다":"진행방향이 위쪽"):"북쪽이 위쪽",3000);
 };
-map.on("rotate",()=>{ $("#northIcon").style.transform=`rotate(${map.getBearing()}deg)`; });
+map.on("rotate",()=>{ setMeArrow(); $("#northIcon").style.transform=`rotate(${map.getBearing()}deg)`; });
 refreshNorth();
 function onPos(pos){
   const c=pos.coords; updateHeading(c,[c.latitude,c.longitude]); applyHeading(); const ll=placeMe(c);
-  if(follow){ if(map.getZoom()<15) map.setView(ll,16,{animate:false}); else map.panTo(ll,{animate:false}); }
+  if(follow){ if(map.getZoom()<15) map.setView(ll,16,{animate:false}); else map.panTo(ll,{animate:false}); if(headUp&&mode==="nav") recenter(ll); }
   if(recording) addRec(c,pos.timestamp);     // "기록 시작" 중일 때만 지나온 길 기록
   refreshUi();
 }
@@ -611,7 +624,7 @@ map.on("dragstart",()=>{ if(follow&&mode!=="view"){ follow=false; refreshUi(); }
 calcRecKm(); drawRec(); refreshUi(); renderRecDays();
 if(PAGE==="nav") setMode("nav");               // 트래커 페이지는 열자마자 내 위치 추적 시작
 
-const APP_V="v0.23"; $("#ver").textContent=APP_V;
+const APP_V="v0.25"; $("#ver").textContent=APP_V;
 if("serviceWorker" in navigator && /^https?:$/.test(location.protocol)){
   const had=!!navigator.serviceWorker.controller;
   navigator.serviceWorker.register("sw.js").then(r=>r.update()).catch(()=>{});
