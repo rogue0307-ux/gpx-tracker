@@ -132,3 +132,4 @@ body.live #btnNorth{display:flex}
 #dimHint.show{opacity:.85}
 #dim svg[hidden]{display:none}
 #dimGo{width:min(66vw,44vh);height:auto}
+#dimDir{text-align:center;line-height:1.35}

@@ -690,7 +690,7 @@ map.on("dragstart",()=>{ if(follow&&mode!=="view"){ follow=false; refreshUi(); }
 calcRecKm(); drawRec(); refreshUi(); renderRecDays();
 if(PAGE==="nav") setMode("nav");               // 트래커 페이지는 열자마자 내 위치 추적 시작
 
-const APP_V="v0.48"; $("#ver").textContent=APP_V;
+const APP_V="v0.49"; $("#ver").textContent=APP_V;
 if("serviceWorker" in navigator && /^https?:$/.test(location.protocol)){
   const had=!!navigator.serviceWorker.controller;
   navigator.serviceWorker.register("sw.js").then(r=>r.update()).catch(()=>{});
@@ -791,10 +791,10 @@ if($("#btnOff")&&$("#btnOff").tagName==="BUTTON"){ $("#btnOff").onclick=offDownl
   function buildRoute(){
     const vis=tracks.filter(t=>t.visible!==false), sig=vis.map(t=>t.id+":"+t.pts).join(",");
     if(route&&route.sig===sig) return route;
-    const pts=[]; for(const t of vis) for(const sg of t.segs) for(const p of sg) pts.push([p[0],p[1]]);
+    const pts=[], ends=[]; for(const t of vis){ for(const sg of t.segs) for(const p of sg) pts.push([p[0],p[1]]); ends.push(pts.length-1); }   // ends: 트랙(=하루)별 마지막 점 번호
     const cum=[0]; for(let i=1;i<pts.length;i++) cum.push(cum[i-1]+hav(pts[i-1],pts[i]));
     rIdx=-1; try{ const o=JSON.parse(localStorage.getItem("gpx.ridx")||"null"); if(o&&o.sig===sig&&o.i<pts.length&&Date.now()-(o.t||0)<12*3600e3) rIdx=o.i; }catch(e){}     // 앱을 껐다 켜도 진행 위치 복원(12시간 지나면 새 주행으로 보고 버림)
-    return (route={sig,pts,cum});
+    return (route={sig,pts,cum,ends});
   }
   function nearest(pts,ll,from,to,ref){          // [인덱스, 거리(m)] — ref가 있으면 최단거리+20m 이내 후보 중 ref에 가장 가까운 번호(겹치는 구간에서 진행 위치 우선, ref=0이면 가장 앞 번호)
     const cl=Math.cos(ll[0]*Math.PI/180), lo=Math.max(0,from), hi=Math.min(pts.length-1,to); let bi=-1,bd=1e18;
@@ -814,7 +814,8 @@ if($("#btnOff")&&$("#btnOff").tagName==="BUTTON"){ $("#btnOff").onclick=offDownl
     if(i!==rIdx||saveT++%20===0){ try{ localStorage.setItem("gpx.ridx",JSON.stringify({sig:R.sig,i,t:Date.now()})); }catch(e){} }
     rIdx=i;
     const look=Math.max(0.12,effSpd()*8/1000); let j=i; while(j<R.pts.length-1&&R.cum[j]-R.cum[i]<look) j++;
-    return {d,brg:bearing(ll,R.pts[j]),rem:R.cum[R.cum.length-1]-R.cum[i]};
+    const e=R.ends.find(x=>x>=i); const today=e==null?null:R.cum[e]-R.cum[i];
+    return {d,brg:bearing(ll,R.pts[j]),rem:R.cum[R.cum.length-1]-R.cum[i],today:R.ends.length>1?today:null};
   }
   const VNAME=["방향만","방향+속도","경로 안내"];
   function render(){
@@ -827,7 +828,8 @@ if($("#btnOff")&&$("#btnOff").tagName==="BUTTON"){ $("#btnOff").onclick=offDownl
       else{
         const rel=h==null?g.brg:g.brg-h, dl=((rel-shown+540)%360)-180; shown=shown+dl;     // 화면 위=직진, 오른쪽=우회전 쪽
         $("#goArrow").parentElement.style.transform=`rotate(${shown}deg)`;
-        $("#dimDir").textContent=(g.d<40?"경로 위":`경로 이탈 ${Math.round(g.d)}m`)+` · 남은 ${g.rem>=10?Math.round(g.rem):g.rem.toFixed(1)}km`+(h==null?" · 방향 미확정":"");
+        const fk=v=>v>=10?Math.round(v):v.toFixed(1);
+        $("#dimDir").innerHTML=(g.d<40?"경로 위":`경로 이탈 ${Math.round(g.d)}m`)+(h==null?" · 방향 미확정":"")+"<br>"+(g.today!=null?`오늘 ${fk(g.today)}km · 전체 ${fk(g.rem)}km`:`남은 ${fk(g.rem)}km`);
       }
     }else $("#dimDir").textContent=h==null?"방향 --":`${NAMES[Math.round(h/22.5)%16]} ${Math.round(h)}°`;
     $("#dimSpd").innerHTML=ver>=2?`${sp}<small>km/h</small>`:"";
