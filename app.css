@@ -120,3 +120,13 @@ body.live #btnNorth{display:flex}
 .wx{position:absolute;left:58px;right:76px;top:12px;z-index:1000;background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:7px 10px;font-size:13px;text-align:center;box-shadow:0 4px 18px rgba(0,0,0,.25);pointer-events:none}
 .wx[hidden]{display:none}
 .toast{top:60px!important}
+
+#dim{position:fixed;inset:0;z-index:5000;background:#000;color:#f97316;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;touch-action:none;user-select:none;-webkit-user-select:none}
+#dim[hidden]{display:none}
+#dim svg{width:min(62vw,46vh);height:auto;opacity:.78}
+#dimDir{font-size:30px;font-weight:700;opacity:.8;letter-spacing:.02em}
+#dimSpd{font-size:84px;font-weight:800;line-height:1;opacity:.85;font-variant-numeric:tabular-nums}
+#dimSpd small{font-size:26px;font-weight:600;margin-left:6px;opacity:.7}
+#dimRec{font-size:16px;color:#ff3b30;opacity:.8;min-height:20px}
+#dimHint{position:absolute;bottom:34px;font-size:14px;color:#9a5a2b;opacity:.0;transition:opacity .6s}
+#dimHint.show{opacity:.85}

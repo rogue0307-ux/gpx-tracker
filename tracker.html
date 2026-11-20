@@ -40,13 +40,17 @@
     <div class="nav">
       <div class="hud" id="hud"></div>
       <div class="acts" id="acts">
-        <button id="btnRec">● 기록 시작</button>
+        <button id="btnRec">● 기록 시작</button><button id="btnDim" title="절전 화면(검은 화면에 방향·속도)">절전</button>
       </div>
       <div class="seg" id="seg"><button data-m="view" data-go="index.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v4h4"/><path d="M12 7.5V12l3 2"/></svg>History</button><button data-m="nav" data-go="tracker.html" class="on rec"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 5 20l7-4 7 4z"/></svg>Tracking</button></div>
     </div>
   </div>
 </div>
 
+<div id="dim" hidden>
+  <svg id="dimRose" viewBox="-100 -100 200 200"><g id="roseRot"><circle r="86" fill="none" stroke="currentColor" stroke-width="2" opacity=".5"/><path d="M0-86v-12M0 86v12M-86 0h-12M86 0h12" stroke="currentColor" stroke-width="3"/><text y="-64" text-anchor="middle" font-size="22" fill="currentColor">N</text><text x="68" y="8" text-anchor="middle" font-size="18" fill="currentColor" opacity=".7">E</text><text y="80" text-anchor="middle" font-size="18" fill="currentColor" opacity=".7">S</text><text x="-68" y="8" text-anchor="middle" font-size="18" fill="currentColor" opacity=".7">W</text></g><path d="M0-52 20 26 0 12-20 26z" fill="currentColor"/></svg>
+  <div id="dimDir"></div><div id="dimSpd"></div><div id="dimRec"></div><div id="dimHint"></div>
+</div>
 <script src="lib/leaflet.js"></script>
 <script src="lib/leaflet-rotate.js"></script>
 <script src="app.js"></script>

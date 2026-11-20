@@ -670,7 +670,7 @@ map.on("dragstart",()=>{ if(follow&&mode!=="view"){ follow=false; refreshUi(); }
 calcRecKm(); drawRec(); refreshUi(); renderRecDays();
 if(PAGE==="nav") setMode("nav");               // 트래커 페이지는 열자마자 내 위치 추적 시작
 
-const APP_V="v0.39"; $("#ver").textContent=APP_V;
+const APP_V="v0.40"; $("#ver").textContent=APP_V;
 if("serviceWorker" in navigator && /^https?:$/.test(location.protocol)){
   const had=!!navigator.serviceWorker.controller;
   navigator.serviceWorker.register("sw.js").then(r=>r.update()).catch(()=>{});
@@ -759,4 +759,28 @@ function wxPosUpdate(ll){ if(!wxPos||hav(wxPos,ll)>15){ wxPos=ll; try{ localStor
 setTimeout(wxRefresh,1200); setInterval(wxRefresh,15*60e3);
 
 if($("#btnOff")&&$("#btnOff").tagName==="BUTTON"){ $("#btnOff").onclick=offDownload; offStatus(); }
+
+/* ---------- 절전 화면: 검은 화면(OLED 소등)에 방향·속도만 — 탭: 방향만↔방향+속도, 길게: 종료 ---------- */
+(function(){
+  const dim=$("#dim"); if(!dim||dim.tagName==="INPUT"||!$("#btnDim")) return;
+  let ver=1, timer=null, hold=null, hintT=null; try{ ver=+localStorage.getItem("gpx.dimv")||1; }catch(e){}
+  const setBright=v=>{ try{ window.AndroidBright&&window.AndroidBright.setBrightness(v); }catch(e){} };
+  const NAMES=["북","북북동","북동","동북동","동","동남동","남동","남남동","남","남남서","남서","서남서","서","서북서","북서","북북서"];
+  function render(){
+    const h=(typeof hdg==="number")?hdg:null;
+    $("#roseRot").style.transform=`rotate(${h==null?0:-h}deg)`;                       // 진행방향이 항상 위, 북쪽 표시가 돈다
+    $("#dimDir").textContent=h==null?"방향 --":`${NAMES[Math.round(h/22.5)%16]} ${Math.round(h)}°`;
+    const sp=lastFix&&lastFix.spd!=null?Math.round(lastFix.spd*3.6):0;
+    $("#dimSpd").innerHTML=ver===2?`${sp}<small>km/h</small>`:"";
+    $("#dimRec").textContent=recording?"● REC":"";
+  }
+  function hint(){ const el=$("#dimHint"); el.textContent=`탭: ${ver===1?"속도도 표시":"방향만 표시"} · 길게 누르기: 종료`; el.classList.add("show"); clearTimeout(hintT); hintT=setTimeout(()=>el.classList.remove("show"),3500); }
+  function open_(){ dim.hidden=false; setBright(0.01); reqWake(); render(); hint(); timer=setInterval(render,250); }
+  function close_(){ dim.hidden=true; setBright(-1); clearInterval(timer); timer=null; }
+  $("#btnDim").onclick=open_;
+  dim.addEventListener("pointerdown",()=>{ clearTimeout(hold); hold=setTimeout(()=>{ hold=null; close_(); },700); });
+  dim.addEventListener("pointerup",()=>{ if(hold){ clearTimeout(hold); hold=null; ver=ver===1?2:1; try{localStorage.setItem("gpx.dimv",ver)}catch(e){} render(); hint(); } });
+  dim.addEventListener("pointercancel",()=>{ clearTimeout(hold); hold=null; });
+  document.addEventListener("visibilitychange",()=>{ if(!document.hidden&&!dim.hidden) reqWake(); });
+})();
 })();
