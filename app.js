@@ -690,7 +690,7 @@ map.on("dragstart",()=>{ if(follow&&mode!=="view"){ follow=false; refreshUi(); }
 calcRecKm(); drawRec(); refreshUi(); renderRecDays();
 if(PAGE==="nav") setMode("nav");               // 트래커 페이지는 열자마자 내 위치 추적 시작
 
-const APP_V="v0.49"; $("#ver").textContent=APP_V;
+const APP_V="v0.50"; $("#ver").textContent=APP_V;
 if("serviceWorker" in navigator && /^https?:$/.test(location.protocol)){
   const had=!!navigator.serviceWorker.controller;
   navigator.serviceWorker.register("sw.js").then(r=>r.update()).catch(()=>{});
@@ -828,8 +828,7 @@ if($("#btnOff")&&$("#btnOff").tagName==="BUTTON"){ $("#btnOff").onclick=offDownl
       else{
         const rel=h==null?g.brg:g.brg-h, dl=((rel-shown+540)%360)-180; shown=shown+dl;     // 화면 위=직진, 오른쪽=우회전 쪽
         $("#goArrow").parentElement.style.transform=`rotate(${shown}deg)`;
-        const fk=v=>v>=10?Math.round(v):v.toFixed(1);
-        $("#dimDir").innerHTML=(g.d<40?"경로 위":`경로 이탈 ${Math.round(g.d)}m`)+(h==null?" · 방향 미확정":"")+"<br>"+(g.today!=null?`오늘 ${fk(g.today)}km · 전체 ${fk(g.rem)}km`:`남은 ${fk(g.rem)}km`);
+        $("#dimDir").textContent=(g.d<40?"경로 위":`경로 이탈 ${Math.round(g.d)}m`)+(h==null?" · 방향 미확정":"");
       }
     }else $("#dimDir").textContent=h==null?"방향 --":`${NAMES[Math.round(h/22.5)%16]} ${Math.round(h)}°`;
     $("#dimSpd").innerHTML=ver>=2?`${sp}<small>km/h</small>`:"";
